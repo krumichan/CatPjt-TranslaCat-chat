@@ -1,0 +1,6 @@
+@TranslaCat.Chat.Api_HostAddress = http://localhost:5079
+
+GET {{TranslaCat.Chat.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
