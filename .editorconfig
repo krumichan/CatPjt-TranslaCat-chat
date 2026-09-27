@@ -1,0 +1,113 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# =========================================================
+# C#
+# =========================================================
+
+[*.cs]
+indent_style = space
+indent_size = 4
+tab_width = 4
+
+# using
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:suggestion
+
+# =========================================================
+# 줄바꿈 / 중괄호
+# =========================================================
+
+# Microsoft C# 기본 스타일: Allman
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+# 한 줄짜리 if/block으로 압축하지 않음
+csharp_preserve_single_line_blocks = false
+csharp_preserve_single_line_statements = false
+
+# =========================================================
+# 들여쓰기
+# =========================================================
+
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+csharp_indent_case_contents = true
+csharp_indent_case_contents_when_block = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+
+# =========================================================
+# 기본 코드 스타일
+# =========================================================
+
+# if/for/while 등에 중괄호 사용
+csharp_prefer_braces = true:suggestion
+
+# int/String 대신 int/string 같은 C# 키워드 선호
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+dotnet_style_predefined_type_for_member_access = true:suggestion
+
+# 불필요한 this. 사용 안 함
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+
+# readonly가 가능한 field 제안
+dotnet_style_readonly_field = true:suggestion
+
+# null propagation / object initializer 등 현대 C# 스타일
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+
+# =========================================================
+# 긴 한 줄 메서드로 과도하게 압축하지 않음
+# =========================================================
+
+csharp_style_expression_bodied_methods = false:suggestion
+csharp_style_expression_bodied_constructors = false:suggestion
+
+# property / accessor의 간단한 표현은 허용
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+
+# =========================================================
+# 기타 파일
+# =========================================================
+
+[*.{csproj,props,targets}]
+indent_style = space
+indent_size = 2
+
+[*.{json,jsonc}]
+indent_style = space
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.{razor,cshtml}]
+indent_style = space
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{bat,cmd}]
+end_of_line = crlf

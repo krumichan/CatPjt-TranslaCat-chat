@@ -1,14 +1,34 @@
-var builder = WebApplication.CreateBuilder(args);
+using TranslaCat.Chat.Api.Configuration;
+using TranslaCat.Chat.Api.Core;
+using TranslaCat.Chat.Api.Read;
+using TranslaCat.Chat.Api.Realtime;
+using TranslaCat.Chat.Api.Runtime;
+using TranslaCat.Chat.Api.ServiceAuthentication;
 
-// Add services to the container.
+ChatConfiguration.ValidateEnvironment(
+    Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
+    Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"));
+var validateConfiguration = args.Contains("--validate-configuration", StringComparer.Ordinal);
+var builder = WebApplication.CreateBuilder(args.Where(value => value != "--validate-configuration").ToArray());
+ChatConfiguration.AddSecretFiles(builder.Configuration);
+ChatConfiguration.Validate(builder.Configuration, builder.Environment.EnvironmentName);
 
-builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+// 읽음 transport와 기존 Health Controller를 같은 실제 파이프라인에 연결한다.
+builder.Services.AddChatReadHttp();
+builder.Services.AddChatRuntime(builder.Configuration);
+builder.Services.AddChatServiceAuthentication(builder.Configuration);
+builder.Services.AddChatCore(builder.Configuration, builder.Environment.EnvironmentName);
 builder.Services.AddOpenApi();
+
+// 실제 provider와 Options 등록만 검사한다. host/worker/DB/Redis 연결은 시작하지 않는다.
+if (validateConfiguration)
+{
+    Console.WriteLine("VERIFIED: CHAT configuration binding. No host or external connection was started.");
+    return;
+}
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -16,8 +36,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseAuthorization();
-
-app.MapControllers();
+app.UseChatReadHttp();
+app.MapChatRealtime();
+app.MapChatReadiness();
 
 app.Run();

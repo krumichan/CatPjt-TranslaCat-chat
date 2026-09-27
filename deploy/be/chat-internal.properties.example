@@ -1,0 +1,17 @@
+# BE가 SPRING_CONFIG_ADDITIONAL_LOCATION으로 명시적으로 읽는 외부 properties 예제.
+# 기본은 비활성이다. 실제 사용자 JWT/LL 설정은 이 파일에서 덮어쓰지 않는다.
+# secret은 외부 configtree의 canonical key 파일로 공급한다. 예제에는 값/경로가 없다.
+chat.gateway.enabled=${CHAT_GATEWAY_ENABLED:false}
+chat.gateway.base-url=${CHAT_GATEWAY_BASE_URL:}
+chat.gateway.environment=${CHAT_RUNTIME_ENVIRONMENT:}
+chat.gateway.issuer=translacat-be
+chat.gateway.audience=translacat-chat
+chat.gateway.service=translacat-be
+chat.gateway.timeout-seconds=10
+chat.gateway.token-lifetime-seconds=60
+
+chat.core.identity.enabled=${CHAT_CORE_IDENTITY_ENABLED:false}
+chat.core.identity.environment=${CHAT_RUNTIME_ENVIRONMENT:}
+chat.core.identity.issuer=translacat-chat
+chat.core.identity.audience=translacat-be
+chat.core.identity.service=translacat-chat

@@ -1,0 +1,93 @@
+services:
+  chat-api:
+    image: translacat-chat:local-preparation
+    build:
+      context: ../..
+      dockerfile: deploy/chat/Dockerfile
+    init: true
+    restart: unless-stopped
+    group_add: ["20001"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 160
+    mem_limit: 768m
+    cpus: 1.0
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    ports:
+      - "127.0.0.1:${CHAT_API_PORT:-5085}:8080"
+    environment:
+      DOTNET_ENVIRONMENT: ${DOTNET_ENVIRONMENT:?Set Development or Production explicitly}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-${DOTNET_ENVIRONMENT:?Set Development or Production explicitly}}
+      AllowedHosts: "${CHAT_ALLOWED_HOSTS:-localhost;127.0.0.1}"
+      Chat__SourceTimeZone: ${CHAT_SOURCE_TIME_ZONE:?Set the verified source time zone explicitly}
+      Chat__Redis__Namespace: ${CHAT_REDIS_NAMESPACE:?Set the CHAT environment namespace explicitly}
+      Chat__Redis__Endpoint: chat-redis:6379
+      Chat__Redis__User: chat
+      Chat__Redis__Password_FILE: /run/secrets/chat_redis_password_api
+      Chat__Redis__UseTls: "false"
+      Chat__Redis__AllowPrivatePlaintext: "true"
+      Chat__Database__ConnectionString_FILE: /run/secrets/chat_database_connection
+      Chat__Authentication__Base64SigningKey_FILE: /run/secrets/chat_jwt_signing_key
+      Chat__Authentication__Enabled: "true"
+      Chat__Presence__Enabled: "true"
+      Chat__Presence__SessionTtl: "00:01:00"
+      Chat__Presence__RefreshInterval: "00:00:20"
+      Chat__Presence__OfflineGrace: "00:00:30"
+    secrets:
+      - chat_redis_password_api
+      - chat_database_connection
+      - chat_jwt_signing_key
+    depends_on:
+      chat-redis:
+        condition: service_healthy
+    networks: [chat-private, chat-egress]
+
+  chat-redis:
+    image: redis:7.4.10-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+    user: redis
+    group_add: ["20002"]
+    entrypoint: ["/bin/sh", "/chat-config/start-chat-redis.sh"]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 80
+    mem_limit: 384m
+    cpus: 1.0
+    stop_grace_period: 15s
+    tmpfs:
+      - /run/chat:rw,noexec,nosuid,size=1m,mode=1777
+      - /data:rw,noexec,nosuid,size=1m,mode=1777
+    environment:
+      CHAT_REDIS_NAMESPACE: ${CHAT_REDIS_NAMESPACE:?Set the CHAT environment namespace explicitly}
+    secrets:
+      - chat_redis_password
+    volumes:
+      - ./redis.conf:/chat-config/redis.conf:ro
+      - ./start-chat-redis.sh:/chat-config/start-chat-redis.sh:ro
+      - ./check-chat-redis.sh:/chat-config/check-chat-redis.sh:ro
+    healthcheck:
+      test: ["CMD", "/bin/sh", "/chat-config/check-chat-redis.sh"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks: [chat-private]
+
+networks:
+  chat-private:
+    internal: true
+  chat-egress: {}
+
+secrets:
+  chat_redis_password_api:
+    file: ${CHAT_REDIS_PASSWORD_FILE:?Supply a protected secret file path}_api
+  chat_redis_password:
+    file: ${CHAT_REDIS_PASSWORD_FILE:?Supply a protected secret file path}
+  chat_database_connection:
+    file: ${CHAT_DATABASE_CONNECTION_FILE:?Supply a protected runtime DB connection file path}
+  chat_jwt_signing_key:
+    file: ${CHAT_JWT_SIGNING_KEY_FILE:?Supply a protected BE-compatible Base64 signing key file path}

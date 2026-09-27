@@ -1,0 +1,4 @@
+# 배포 스크립트가 검증된 commit SHA image를 주입한다. 기본 Compose의 Redis/secret/network 계약은 유지한다.
+services:
+  chat-api:
+    image: ${CHAT_IMAGE:?Supply the immutable CHAT image tag}

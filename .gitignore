@@ -45,13 +45,22 @@ logs/
 .env
 .env.*
 !.env.example
+!.env.*.example
 
 secrets.json
 *.secrets.json
+.secrets/
+.releases/
+secrets/
+*.key
+*.pem
+*.pfx
+*.p12
 
 # 개인 로컬 설정 파일을 별도로 만들 경우
 appsettings.Local.json
 appsettings.*.Local.json
+deploy/local/generated/
 
 # ============================================================
 # JetBrains Rider / IntelliJ

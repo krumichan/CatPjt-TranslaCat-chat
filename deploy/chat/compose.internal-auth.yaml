@@ -1,0 +1,42 @@
+# 기본 Compose와 함께 명시적으로 선택하는 파일이다. 이 구성만으로 상대 서비스 합의/배포를 뜻하지 않는다.
+services:
+  chat-api:
+    environment:
+      Chat__Realtime__AllowedOrigins__0: ${CHAT_BROWSER_ORIGIN:?Supply the verified browser origin for the proxy path}
+      Chat__ServiceAuthentication__Ingress__Enabled: ${CHAT_SERVICE_INGRESS_ENABLED:-false}
+      Chat__ServiceAuthentication__Ingress__Issuer: ${CHAT_SERVICE_INGRESS_ISSUER:-}
+      Chat__ServiceAuthentication__Ingress__Audience: ${CHAT_SERVICE_INGRESS_AUDIENCE:-}
+      Chat__ServiceAuthentication__Ingress__Service: ${CHAT_SERVICE_INGRESS_SERVICE:-}
+      Chat__ServiceAuthentication__Ingress__Base64SigningKey_FILE: /run/secrets/chat_ingress_signing_key
+      Chat__Identity__Enabled: ${CHAT_IDENTITY_ENABLED:-false}
+      Chat__Identity__BaseUrl: ${CHAT_IDENTITY_BASE_URL:-}
+      Chat__Identity__TimeoutSeconds: ${CHAT_IDENTITY_TIMEOUT_SECONDS:-5}
+      Chat__Identity__ServiceAuthentication__Issuer: ${CHAT_IDENTITY_ISSUER:-}
+      Chat__Identity__ServiceAuthentication__Audience: ${CHAT_IDENTITY_AUDIENCE:-}
+      Chat__Identity__ServiceAuthentication__Service: ${CHAT_IDENTITY_SERVICE:-}
+      Chat__Identity__ServiceAuthentication__Base64SigningKey_FILE: /run/secrets/chat_identity_signing_key
+      Chat__Core__Enabled: ${CHAT_CORE_ENABLED:-false}
+      Chat__Core__BaseUrl: ${CHAT_CORE_BASE_URL:-${CHAT_IDENTITY_BASE_URL:-}}
+      Chat__Core__TimeoutSeconds: ${CHAT_CORE_TIMEOUT_SECONDS:-5}
+      Chat__Core__ServiceAuthentication__Issuer: ${CHAT_CORE_ISSUER:-${CHAT_IDENTITY_ISSUER:-}}
+      Chat__Core__ServiceAuthentication__Audience: ${CHAT_CORE_AUDIENCE:-${CHAT_IDENTITY_AUDIENCE:-}}
+      Chat__Core__ServiceAuthentication__Service: ${CHAT_CORE_SERVICE:-${CHAT_IDENTITY_SERVICE:-}}
+      Chat__Core__ServiceAuthentication__Base64SigningKey_FILE: /run/secrets/chat_identity_signing_key
+      Chat__Ai__Enabled: ${CHAT_AI_ENABLED:-false}
+      Chat__Ai__AiBaseUri: ${CHAT_AI_BASE_URL:-}
+      Chat__Ai__ApiKey_FILE: /run/secrets/chat_ai_api_key
+      Chat__Translation__Enabled: ${CHAT_TRANSLATION_ENABLED:-false}
+      Chat__Translation__AiBaseUri: ${CHAT_AI_BASE_URL:-}
+      Chat__Translation__ApiKey_FILE: /run/secrets/chat_ai_api_key
+    secrets:
+      - chat_ingress_signing_key
+      - chat_identity_signing_key
+      - chat_ai_api_key
+
+secrets:
+  chat_ingress_signing_key:
+    file: ${CHAT_SERVICE_INGRESS_KEY_FILE:?Supply the protected BE-to-CHAT signing key file path}
+  chat_identity_signing_key:
+    file: ${CHAT_IDENTITY_KEY_FILE:?Supply the protected CHAT-to-BE signing key file path}
+  chat_ai_api_key:
+    file: ${CHAT_AI_API_KEY_FILE:?Supply the protected CHAT-to-AI API key file path}

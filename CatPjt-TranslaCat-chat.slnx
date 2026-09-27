@@ -1,7 +1,9 @@
 <Solution>
   <Project Path="TranslaCat.Chat.Api/TranslaCat.Chat.Api.csproj" />
+  <Project Path="TranslaCat.Chat.ApiTests/TranslaCat.Chat.ApiTests.csproj" />
   <Project Path="TranslaCat.Chat.Application/TranslaCat.Chat.Application.csproj" />
   <Project Path="TranslaCat.Chat.Domain/TranslaCat.Chat.Domain.csproj" />
   <Project Path="TranslaCat.Chat.Infrastructure/TranslaCat.Chat.Infrastructure.csproj" />
+  <Project Path="TranslaCat.Chat.IntegrationTests/TranslaCat.Chat.IntegrationTests.csproj" />
   <Project Path="TranslaCat.Chat.UnitTests/TranslaCat.Chat.UnitTests.csproj" />
 </Solution>

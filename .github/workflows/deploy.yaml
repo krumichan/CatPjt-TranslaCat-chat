@@ -1,0 +1,85 @@
+name: CHAT Deploy to OCI
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chat-oci-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.401
+
+      - name: Restore
+        run: dotnet restore CatPjt-TranslaCat-chat.slnx
+
+      - name: Build Release
+        run: dotnet build CatPjt-TranslaCat-chat.slnx --configuration Release --no-restore
+
+      - name: Test isolated suites
+        run: |
+          dotnet test TranslaCat.Chat.UnitTests/TranslaCat.Chat.UnitTests.csproj --configuration Release --no-build --no-restore
+          dotnet test TranslaCat.Chat.ApiTests/TranslaCat.Chat.ApiTests.csproj --configuration Release --no-build --no-restore
+
+      # BE의 ENV_FILE_CONTENT와 같은 GitHub Secrets 공급 경로를 사용한다.
+      # 인코딩 자료는 SSH 환경변수로 전송하고 원격 보호 파일에서만 디코딩한다.
+      - name: Check production secret inputs
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_USERNAME: ${{ secrets.OCI_USERNAME }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          OCI_SSH_FINGERPRINT: ${{ secrets.OCI_SSH_FINGERPRINT }}
+          CHAT_PRODUCTION_ENV_B64: ${{ secrets.CHAT_PRODUCTION_ENV_B64 }}
+          CHAT_REDIS_PASSWORD_B64: ${{ secrets.CHAT_REDIS_PASSWORD_B64 }}
+          CHAT_DATABASE_CONNECTION_B64: ${{ secrets.CHAT_DATABASE_CONNECTION_B64 }}
+          CHAT_JWT_SIGNING_KEY_B64: ${{ secrets.CHAT_JWT_SIGNING_KEY_B64 }}
+          CHAT_SERVICE_INGRESS_KEY_B64: ${{ secrets.CHAT_SERVICE_INGRESS_KEY_B64 }}
+          CHAT_IDENTITY_KEY_B64: ${{ secrets.CHAT_IDENTITY_KEY_B64 }}
+          CHAT_AI_API_KEY_B64: ${{ secrets.CHAT_AI_API_KEY_B64 }}
+        run: |
+          for name in OCI_HOST OCI_USERNAME SSH_PRIVATE_KEY OCI_SSH_FINGERPRINT \
+              CHAT_PRODUCTION_ENV_B64 CHAT_REDIS_PASSWORD_B64 CHAT_DATABASE_CONNECTION_B64 \
+              CHAT_JWT_SIGNING_KEY_B64 CHAT_SERVICE_INGRESS_KEY_B64 CHAT_IDENTITY_KEY_B64 CHAT_AI_API_KEY_B64; do
+            test -n "${!name}" || { echo "Missing GitHub Secret: $name" >&2; exit 2; }
+          done
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          CHAT_PRODUCTION_ENV_B64: ${{ secrets.CHAT_PRODUCTION_ENV_B64 }}
+          CHAT_REDIS_PASSWORD_B64: ${{ secrets.CHAT_REDIS_PASSWORD_B64 }}
+          CHAT_DATABASE_CONNECTION_B64: ${{ secrets.CHAT_DATABASE_CONNECTION_B64 }}
+          CHAT_JWT_SIGNING_KEY_B64: ${{ secrets.CHAT_JWT_SIGNING_KEY_B64 }}
+          CHAT_SERVICE_INGRESS_KEY_B64: ${{ secrets.CHAT_SERVICE_INGRESS_KEY_B64 }}
+          CHAT_IDENTITY_KEY_B64: ${{ secrets.CHAT_IDENTITY_KEY_B64 }}
+          CHAT_AI_API_KEY_B64: ${{ secrets.CHAT_AI_API_KEY_B64 }}
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fingerprint: ${{ secrets.OCI_SSH_FINGERPRINT }}
+          envs: CHAT_PRODUCTION_ENV_B64,CHAT_REDIS_PASSWORD_B64,CHAT_DATABASE_CONNECTION_B64,CHAT_JWT_SIGNING_KEY_B64,CHAT_SERVICE_INGRESS_KEY_B64,CHAT_IDENTITY_KEY_B64,CHAT_AI_API_KEY_B64
+          command_timeout: 45m
+          script: |
+            set -eu
+            cd ~/CatPjt-TranslaCat-chat
+            test -z "$(git status --porcelain --untracked-files=no)"
+            git fetch --no-tags origin main
+            git checkout --detach '${{ github.sha }}'
+            test "$(git rev-parse HEAD)" = '${{ github.sha }}'
+            bash scripts/provision-chat-oci.sh '${{ github.sha }}'
+            unset CHAT_PRODUCTION_ENV_B64 CHAT_REDIS_PASSWORD_B64 CHAT_DATABASE_CONNECTION_B64
+            unset CHAT_JWT_SIGNING_KEY_B64 CHAT_SERVICE_INGRESS_KEY_B64 CHAT_IDENTITY_KEY_B64 CHAT_AI_API_KEY_B64
+            bash scripts/deploy-chat-oci.sh '${{ github.sha }}'
