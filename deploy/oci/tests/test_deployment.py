@@ -31,7 +31,10 @@ class ValidationTests(unittest.TestCase):
     def test_wrong_database(self): self.rejected(lambda c:c['database'].update(name='mysql'))
     def test_wrong_runtime_user(self): self.rejected(lambda c:c['database'].update(username='dbadmin'))
     def test_wrong_migration_user(self): self.rejected(lambda c:c['database'].update(migration_username='dbadmin'))
-    def test_passwords_separate(self): self.rejected(lambda c:c['database'].update(migration_password=c['database']['password']))
+    def test_same_password_allowed_for_distinct_accounts(self):
+        c=config('chat');c['database']['migration_password']=c['database']['password']
+        validated=d.validate(c,'chat')
+        self.assertNotEqual(validated['database']['username'],validated['database']['migration_username'])
     def test_placeholder_blocked(self): self.rejected(lambda c:c.update(ai_api_key='REPLACE_KEY'))
     def test_newline_blocked(self): self.rejected(lambda c:c['database'].update(password='valid\nINJECT=value'))
     def test_http_outbound_blocked(self): self.rejected(lambda c:c.update(ai_url='http://161.33.34.50:8000'))

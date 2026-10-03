@@ -57,7 +57,9 @@ def validate(c, service):
     need(db['username']=='translacat_'+service+'_app','RUNTIME_ACCOUNT_MISMATCH')
     need(db['migration_username']=='translacat_'+service+'_migrator','MIGRATION_ACCOUNT_MISMATCH')
     for k in ('username','password','migration_username','migration_password'): one_line(db[k], 'database.'+k)
-    need(db['password'] != db['migration_password'],'SEPARATE_MIGRATION_PASSWORD_REQUIRED')
+    # Runtime과 migration은 서로 다른 MySQL 계정/권한으로 분리한다.
+    # 운영자가 관리 편의를 위해 동일한 암호를 선택하는 것은 허용한다.
+    need(db['username'] != db['migration_username'],'SEPARATE_DATABASE_ACCOUNTS_REQUIRED')
     one_line(c['timezone'],'timezone')
     need(not c['timezone'].startswith('/'),'TIMEZONE_INVALID')
     origin(c['public_url'],'public_url')
