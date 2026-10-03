@@ -198,7 +198,7 @@ def ensure_redis(c, base):
             '--user','10001:10001','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges:true',
             '--memory','160m','--pids-limit','64','--restart','unless-stopped','--network',net,
             '--mount',f'type=bind,src={rd},dst=/run/config,readonly',
-            '--mount','type=volume,src=translacat-chat-redis-data,dst=/data',REDIS_IMAGE,'redis-server','/run/config/redis.conf'])
+            '--mount','type=volume,src=translacat-chat-redis-data,dst=/data,volume-nocopy',REDIS_IMAGE,'redis-server','/run/config/redis.conf'])
     # No password in argv; PING only. No FLUSHALL, ACL SETUSER or container recreation.
     for _ in range(10):
         try:

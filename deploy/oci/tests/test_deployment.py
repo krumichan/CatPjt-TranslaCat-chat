@@ -106,7 +106,7 @@ class RedisTests(unittest.TestCase):
             c=config('chat');d.ensure_redis(c,Path(td));calls=[x.args[0] for x in run.call_args_list]
             create=next(x for x in calls if x[1]=='run')
             self.assertNotIn('-p',create);self.assertNotIn('--publish',create)
-            self.assertIn('type=volume,src=translacat-chat-redis-data,dst=/data',create)
+            self.assertIn('type=volume,src=translacat-chat-redis-data,dst=/data,volume-nocopy',create)
             self.assertNotIn(c['redis']['password'],(Path(td)/'redis/users.acl').read_text())
             self.assertIn('appendonly yes',(Path(td)/'redis/redis.conf').read_text())
 
