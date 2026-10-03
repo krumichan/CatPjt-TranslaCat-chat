@@ -1,85 +1,71 @@
-name: CHAT Deploy to OCI
+name: CHAT verified OCI deployment
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: chat-oci-production
+  group: chat-oci-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up .NET 10
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          dotnet-version: 10.0.401
-
-      - name: Restore
-        run: dotnet restore CatPjt-TranslaCat-chat.slnx
-
-      - name: Build Release
-        run: dotnet build CatPjt-TranslaCat-chat.slnx --configuration Release --no-restore
-
-      - name: Test isolated suites
+          persist-credentials: false
+      - name: Deployment contract tests (offline fixtures)
+        run: python3 -m unittest discover -s deploy/oci/tests -v
+      - name: Compile, isolated application tests, and build runtime
+        run: docker build --platform linux/amd64 --target runtime -f deploy/oci/Dockerfile -t local/verified:${GITHUB_SHA} .
+  release:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build exact release SHA and push GHCR image
+        id: image
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          dotnet test TranslaCat.Chat.UnitTests/TranslaCat.Chat.UnitTests.csproj --configuration Release --no-build --no-restore
-          dotnet test TranslaCat.Chat.ApiTests/TranslaCat.Chat.ApiTests.csproj --configuration Release --no-build --no-restore
-
-      # BE의 ENV_FILE_CONTENT와 같은 GitHub Secrets 공급 경로를 사용한다.
-      # 인코딩 자료는 SSH 환경변수로 전송하고 원격 보호 파일에서만 디코딩한다.
-      - name: Check production secret inputs
+          set -euo pipefail
+          export DOCKER_CONFIG="$(mktemp -d)"
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build --platform linux/amd64 --target runtime -f deploy/oci/Dockerfile             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY"             --label "org.opencontainers.image.revision=$GITHUB_SHA"             -t "$repository:$GITHUB_SHA" .
+          docker push "$repository:$GITHUB_SHA"
+          docker pull "$repository:$GITHUB_SHA"
+          immutable="$(docker inspect --format '{{index .RepoDigests 0}}' "$repository:$GITHUB_SHA")"
+          [[ "$immutable" == "$repository@sha256:"* ]]
+          printf 'ref=%s\n' "$immutable" >> "$GITHUB_OUTPUT"
+      - name: Deploy using verified SSH host keys
         env:
           OCI_HOST: ${{ secrets.OCI_HOST }}
           OCI_USERNAME: ${{ secrets.OCI_USERNAME }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          OCI_SSH_FINGERPRINT: ${{ secrets.OCI_SSH_FINGERPRINT }}
-          CHAT_PRODUCTION_ENV_B64: ${{ secrets.CHAT_PRODUCTION_ENV_B64 }}
-          CHAT_REDIS_PASSWORD_B64: ${{ secrets.CHAT_REDIS_PASSWORD_B64 }}
-          CHAT_DATABASE_CONNECTION_B64: ${{ secrets.CHAT_DATABASE_CONNECTION_B64 }}
-          CHAT_JWT_SIGNING_KEY_B64: ${{ secrets.CHAT_JWT_SIGNING_KEY_B64 }}
-          CHAT_SERVICE_INGRESS_KEY_B64: ${{ secrets.CHAT_SERVICE_INGRESS_KEY_B64 }}
-          CHAT_IDENTITY_KEY_B64: ${{ secrets.CHAT_IDENTITY_KEY_B64 }}
-          CHAT_AI_API_KEY_B64: ${{ secrets.CHAT_AI_API_KEY_B64 }}
-        run: |
-          for name in OCI_HOST OCI_USERNAME SSH_PRIVATE_KEY OCI_SSH_FINGERPRINT \
-              CHAT_PRODUCTION_ENV_B64 CHAT_REDIS_PASSWORD_B64 CHAT_DATABASE_CONNECTION_B64 \
-              CHAT_JWT_SIGNING_KEY_B64 CHAT_SERVICE_INGRESS_KEY_B64 CHAT_IDENTITY_KEY_B64 CHAT_AI_API_KEY_B64; do
-            test -n "${!name}" || { echo "Missing GitHub Secret: $name" >&2; exit 2; }
-          done
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          CHAT_PRODUCTION_ENV_B64: ${{ secrets.CHAT_PRODUCTION_ENV_B64 }}
-          CHAT_REDIS_PASSWORD_B64: ${{ secrets.CHAT_REDIS_PASSWORD_B64 }}
-          CHAT_DATABASE_CONNECTION_B64: ${{ secrets.CHAT_DATABASE_CONNECTION_B64 }}
-          CHAT_JWT_SIGNING_KEY_B64: ${{ secrets.CHAT_JWT_SIGNING_KEY_B64 }}
-          CHAT_SERVICE_INGRESS_KEY_B64: ${{ secrets.CHAT_SERVICE_INGRESS_KEY_B64 }}
-          CHAT_IDENTITY_KEY_B64: ${{ secrets.CHAT_IDENTITY_KEY_B64 }}
-          CHAT_AI_API_KEY_B64: ${{ secrets.CHAT_AI_API_KEY_B64 }}
-        with:
-          host: ${{ secrets.OCI_HOST }}
-          username: ${{ secrets.OCI_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          fingerprint: ${{ secrets.OCI_SSH_FINGERPRINT }}
-          envs: CHAT_PRODUCTION_ENV_B64,CHAT_REDIS_PASSWORD_B64,CHAT_DATABASE_CONNECTION_B64,CHAT_JWT_SIGNING_KEY_B64,CHAT_SERVICE_INGRESS_KEY_B64,CHAT_IDENTITY_KEY_B64,CHAT_AI_API_KEY_B64
-          command_timeout: 45m
-          script: |
-            set -eu
-            cd ~/CatPjt-TranslaCat-chat
-            test -z "$(git status --porcelain --untracked-files=no)"
-            git fetch --no-tags origin main
-            git checkout --detach '${{ github.sha }}'
-            test "$(git rev-parse HEAD)" = '${{ github.sha }}'
-            bash scripts/provision-chat-oci.sh '${{ github.sha }}'
-            unset CHAT_PRODUCTION_ENV_B64 CHAT_REDIS_PASSWORD_B64 CHAT_DATABASE_CONNECTION_B64
-            unset CHAT_JWT_SIGNING_KEY_B64 CHAT_SERVICE_INGRESS_KEY_B64 CHAT_IDENTITY_KEY_B64 CHAT_AI_API_KEY_B64
-            bash scripts/deploy-chat-oci.sh '${{ github.sha }}'
+          SSH_PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          BE_JUMP_HOST: ${{ secrets.BE_JUMP_HOST }}
+          BE_JUMP_PRIVATE_KEY: ${{ secrets.BE_JUMP_PRIVATE_KEY }}
+          BE_JUMP_PASSPHRASE: ${{ secrets.BE_JUMP_PASSPHRASE }}
+          RUNTIME_CONFIG_JSON: ${{ secrets.RUNTIME_CONFIG_JSON }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_IMAGE: ${{ steps.image.outputs.ref }}
+        run: python3 deploy/oci/ship.py --service chat --image "$RELEASE_IMAGE"

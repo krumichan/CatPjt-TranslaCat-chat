@@ -1,0 +1,16 @@
+{
+  "Environment": "Development",
+  "ChatPort": 5079,
+  "BePort": 8080,
+  "AiPort": 8000,
+  "AiEnabled": true,
+  "TranslationEnabled": true,
+  "SourceTimeZone": "Asia/Tokyo",
+  "BrowserOrigin": "http://localhost:3000",
+  "RedisEndpoint": "127.0.0.1:16380",
+  "RedisNamespace": "translacat:chat:Development",
+  "SecretDirectory": "../../.secrets/development",
+  "BeLocalSecretsFile": "../../../CatPjt-TranslaCat-be/src/main/resources/application-local.properties",
+  "AiEnvironmentFile": "../../../CatPjt-TranslaCat-ai/.env",
+  "BeJarPath": "../../../CatPjt-TranslaCat-be/build/chat-local/libs/spring-boot-translacat-0.0.1-SNAPSHOT.jar"
+}

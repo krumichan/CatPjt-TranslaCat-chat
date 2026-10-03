@@ -8,6 +8,11 @@ using TranslaCat.Chat.Api.ServiceAuthentication;
 ChatConfiguration.ValidateEnvironment(
     Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
     Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"));
+if (args.Contains("--migrate-database", StringComparer.Ordinal))
+{
+    Environment.ExitCode = await TranslaCat.Chat.Api.Runtime.ChatMigrationCommand.RunAsync();
+    return;
+}
 var validateConfiguration = args.Contains("--validate-configuration", StringComparer.Ordinal);
 var builder = WebApplication.CreateBuilder(args.Where(value => value != "--validate-configuration").ToArray());
 ChatConfiguration.AddSecretFiles(builder.Configuration);

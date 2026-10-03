@@ -88,3 +88,14 @@ Desktop.ini
 *.bak
 *.swp
 *.orig
+
+# 배포용 실제 자격/로컬 결과는 공개 저장소에 올리지 않는다.
+.local/
+LL_SECRETS.TXT
+CHAT_SECRETS.TXT
+runtime.actual.json
+*.pfx
+
+# Deployment contract test caches
+**/__pycache__/
+*.pyc

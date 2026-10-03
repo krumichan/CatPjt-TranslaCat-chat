@@ -1,0 +1,7 @@
+services:
+  chat-redis:
+    # Docker Desktop은 internal network만 연결한 컨테이너의 host publish를 노출하지 않는다.
+    networks: [chat-private, chat-egress]
+    # 호스트의 dotnet 프로세스에서만 접속한다. 공용 Redis의 port/data는 사용하지 않는다.
+    ports:
+      - "127.0.0.1:${CHAT_HOST_REDIS_PORT:?Set the Development Redis port}:6379"

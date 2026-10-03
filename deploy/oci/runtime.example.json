@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "service": "chat",
+  "public_url": "https://217.142.244.88:8443",
+  "timezone": "REPLACE_VERIFIED_RUNTIME_TIME_ZONE",
+  "database": {
+    "host": "10.0.2.10",
+    "port": 3306,
+    "name": "translacat_chat",
+    "username": "translacat_chat_app",
+    "password": "REPLACE_RUNTIME_DB_PASSWORD",
+    "migration_username": "translacat_chat_migrator",
+    "migration_password": "REPLACE_MIGRATION_DB_PASSWORD"
+  },
+  "ai_url": "https://161.33.34.50:8443",
+  "ai_api_key": "REPLACE_AI_KEY_MATCHING_AI_SERVER",
+  "mysql_ca_pem": "FILLED_BY_COMPLETE_RUNTIME_CONFIG_TOOL",
+  "service_ca_pem": "FILLED_BY_COMPLETE_RUNTIME_CONFIG_TOOL",
+  "expected_mysql_ca_sha256": "FILLED_BY_COMPLETE_RUNTIME_CONFIG_TOOL",
+  "allow_app_rollback_after_migration": false,
+  "be_url": "https://217.142.230.186:8443",
+  "browser_origin": "REPLACE_ACTUAL_FRONTEND_HTTPS_ORIGIN",
+  "user_jwt_key_base64": "REPLACE_BE_USER_JWT_BASE64_KEY",
+  "ingress_key_base64": "REPLACE_BE_TO_CHAT_BASE64_KEY",
+  "identity_key_base64": "REPLACE_CHAT_TO_BE_BASE64_KEY",
+  "redis": {
+    "container_name": "translacat-chat-redis",
+    "network": "translacat-chat-private",
+    "user": "chat",
+    "namespace": "translacat:chat:Production",
+    "password": "REPLACE_64_HEX_CHARACTERS"
+  },
+  "expected_vm_private_ip": "10.0.1.11"
+}
