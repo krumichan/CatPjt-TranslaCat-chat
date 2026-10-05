@@ -71,7 +71,8 @@ function New-Fixture([string]$Name) {
     ) -join [Environment]::NewLine
     [IO.File]::WriteAllText($beSource, $beText, $utf8)
     $aiSource = Join-Path $directory 'ai-source.env'
-    $aiText = 'SERVER_API_KEY=synthetic-bootstrap-canary-global-independent' + [Environment]::NewLine +
+    $aiText = 'CHAT_AUTH_MODE=dedicated' + [Environment]::NewLine +
+        'SERVER_API_KEY=synthetic-bootstrap-canary-global-independent' + [Environment]::NewLine +
         'CHAT_SERVER_API_KEY="' + $values['chat-to-ai-api-key'] + '"' + [Environment]::NewLine
     [IO.File]::WriteAllText($aiSource, $aiText, $utf8)
     $manifest = @{
@@ -173,7 +174,8 @@ try {
 
     # 준비 / 실행 / 검증 — process의 기존 동일 방향 원본도 신규 생성보다 먼저 재사용한다.
     $environmentFixture = New-Fixture 'existing-process-source'
-    $globalOnly = 'SERVER_API_KEY=synthetic-bootstrap-canary-global-independent' + [Environment]::NewLine
+    $globalOnly = 'CHAT_AUTH_MODE=dedicated' + [Environment]::NewLine +
+        'SERVER_API_KEY=synthetic-bootstrap-canary-global-independent' + [Environment]::NewLine
     [IO.File]::WriteAllText($environmentFixture.AiSource, $globalOnly, $utf8)
     $processKey = 'synthetic-bootstrap-canary-existing-process-' + [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(16))
     [Environment]::SetEnvironmentVariable('CHAT_SERVER_API_KEY', $processKey)
@@ -182,6 +184,18 @@ try {
         Assert-Check ([IO.File]::ReadAllText((Join-Path $environmentFixture.SecretDirectory 'chat-to-ai-api-key')) -ceq $processKey) 'Missing canonical AI file reuses inherited process source'
         Assert-Check ([IO.File]::ReadAllText($environmentFixture.AiSource) -ceq $globalOnly) 'Process source reuse does not rewrite AI dotenv file'
     } finally { [Environment]::SetEnvironmentVariable('CHAT_SERVER_API_KEY', [NullString]::Value) }
+
+    # 실행 / 검증 — legacy 기본 모드에서는 전용 키가 있어도 기존 SERVER_API_KEY를 그대로 재사용한다.
+    foreach ($modeLine in @('', 'CHAT_AUTH_MODE=legacy')) {
+        $legacyFixture = New-Fixture ('legacy-' + [Guid]::NewGuid().ToString('N'))
+        $legacyKey = 'synthetic-bootstrap-canary-legacy-' + [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(16))
+        $legacySource = $modeLine + [Environment]::NewLine + 'SERVER_API_KEY=' + $legacyKey + [Environment]::NewLine +
+            'CHAT_SERVER_API_KEY=' + $legacyFixture.Values['chat-to-ai-api-key'] + [Environment]::NewLine
+        [IO.File]::WriteAllText($legacyFixture.AiSource, $legacySource, $utf8)
+        & $initialize -ConfigurationFile $legacyFixture.Path | Out-Null
+        Assert-Check ([IO.File]::ReadAllText((Join-Path $legacyFixture.SecretDirectory 'chat-to-ai-api-key')) -ceq $legacyKey) 'Legacy mode reuses global AI receiver key'
+        Assert-Check ([IO.File]::ReadAllText($legacyFixture.AiSource) -ceq $legacySource) 'Legacy mode preserves original AI settings'
+    }
     $environmentMismatch = New-Fixture 'process-source-mismatch'
     [Environment]::SetEnvironmentVariable('CHAT_GATEWAY_SECRETBASE64', [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)))
     try {

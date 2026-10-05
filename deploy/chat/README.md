@@ -39,7 +39,7 @@ Redis는 `Chat:Redis:Endpoint=chat-redis:6379`, `User=chat`, `Password_FILE`, `U
 
 ## 방향별 연결과 개발 키 도구
 
-`compose.internal-auth.yaml`은 기본 Compose에 명시적으로 더하는 선택 구성이다. BE→CHAT ingress, CHAT→BE identity/Core, CHAT→AI의 세 secret 파일을 각각 mount한다. AI reply와 translation은 같은 CHAT→AI 방향의 API key를 공유할 수 있지만 사용자 JWT 키나 반대 방향의 서비스 키와 같아서는 안 된다. 각 `Enabled`의 기본값은 false다. 실제 상대 origin/issuer/audience/service와 `CHAT_BROWSER_ORIGIN`을 공급한다. `CHAT_ALLOWED_HOSTS`는 실제 API로 전달되는 Host를 허용하고 `*`로 자동 완화하지 않는다. secret mount만으로 실제 서비스 연결 완료라고 하지 않는다.
+`compose.internal-auth.yaml`은 기본 Compose와 함께 제공 서비스의 내부 인증을 연결한다. BE→CHAT ingress, CHAT→BE identity/Core, CHAT→AI의 세 secret 파일을 각각 mount한다. AI reply와 translation은 같은 CHAT→AI 방향의 API key를 공유할 수 있지만 사용자 JWT 키나 반대 방향의 서비스 키와 같아서는 안 된다. 제공 서비스와 인증의 `Enabled`는 true로 고정하고 이를 끄던 `CHAT_*_ENABLED` 환경변수는 사용하지 않는다. 실제 상대 origin/issuer/audience/service와 `CHAT_BROWSER_ORIGIN`을 공급해야 하며, 누락된 키·주소는 기존 validator가 거절한다. `CHAT_ALLOWED_HOSTS`는 실제 API로 전달되는 Host를 허용하고 `*`로 자동 완화하지 않는다. secret mount만으로 실제 서비스 연결 완료라고 하지 않는다.
 
 ```powershell
 # Development 전용 신규 파일 생성. 기존 파일이 하나라도 있으면 덮어쓰지 않는다.

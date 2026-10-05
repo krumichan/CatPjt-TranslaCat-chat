@@ -24,6 +24,13 @@ foreach ($path in $private + $public) {
     Assert-Check ($LASTEXITCODE -eq $(if ($private -contains $path) { 0 } else { 1 })) "Git policy: $path"
 }
 
+# 제공 서비스와 인증은 기본 구성에서도 켜고, 필수 자격증명 검증은 유지한다.
+$baseSettings = Get-Content -LiteralPath (Join-Path $workspace 'TranslaCat.Chat.Api/appsettings.json') -Raw | ConvertFrom-Json
+foreach ($section in @('Authentication', 'Identity', 'Core', 'Presence', 'Ai', 'Translation')) {
+    Assert-Check ($baseSettings.Chat.$section.Enabled -eq $true) "Base service is enabled: $section"
+}
+Assert-Check ($baseSettings.Chat.ServiceAuthentication.Ingress.Enabled -eq $true) 'Base ingress authentication is enabled'
+
 # 실행: 민감 원문 없이 설정 구조만 해석한다. 필수값이 빈 공개 예제는 그대로 실행할 수 없어야 한다.
 foreach ($example in @('.env.local.example', '.env.prod.example')) {
     $values = @{}
@@ -102,6 +109,9 @@ if ($IncludeCompose) {
             $values = @(
                 "DOTNET_ENVIRONMENT=$environment", "ASPNETCORE_ENVIRONMENT=$environment",
                 'CHAT_BROWSER_ORIGIN=https://synthetic.example.invalid',
+                # 제거된 availability 변수의 옛 false 값으로 필수 서비스를 끌 수 없어야 한다.
+                'CHAT_SERVICE_INGRESS_ENABLED=false', 'CHAT_IDENTITY_ENABLED=false', 'CHAT_CORE_ENABLED=false',
+                'CHAT_AI_ENABLED=false', 'CHAT_TRANSLATION_ENABLED=false',
                 "CHAT_REDIS_NAMESPACE=translacat:chat:test:$runId", 'CHAT_SOURCE_TIME_ZONE=Etc/UTC',
                 "CHAT_REDIS_PASSWORD_FILE=$safePath", "CHAT_DATABASE_CONNECTION_FILE=$safePath", "CHAT_JWT_SIGNING_KEY_FILE=$safePath",
                 "CHAT_SERVICE_INGRESS_KEY_FILE=$safePath", "CHAT_IDENTITY_KEY_FILE=$safePath", "CHAT_AI_API_KEY_FILE=$safePath"
@@ -124,10 +134,10 @@ if ($IncludeCompose) {
             Assert-Check ($settings.Chat__Ai__ApiKey_FILE -eq '/run/secrets/chat_ai_api_key' -and
                 $settings.Chat__Translation__ApiKey_FILE -eq $settings.Chat__Ai__ApiKey_FILE) "Same CHAT-to-AI direction secret-file: $environment"
             Assert-Check ($settings.Chat__Core__ServiceAuthentication__Base64SigningKey_FILE -eq $settings.Chat__Identity__ServiceAuthentication__Base64SigningKey_FILE -and
-                $settings.Chat__Core__Enabled -eq 'false') "Core and identity same outbound direction, disabled by default: $environment"
+                $settings.Chat__Core__Enabled -eq 'true') "Core and identity share outbound direction and stay enabled: $environment"
             Assert-Check ($settings.Chat__Realtime__AllowedOrigins__0 -eq 'https://synthetic.example.invalid') "Explicit browser origin binding: $environment"
-            Assert-Check ($settings.Chat__ServiceAuthentication__Ingress__Enabled -eq 'false' -and $settings.Chat__Identity__Enabled -eq 'false' -and
-                $settings.Chat__Ai__Enabled -eq 'false' -and $settings.Chat__Translation__Enabled -eq 'false') "Unconfirmed external capabilities stay disabled: $environment"
+            Assert-Check ($settings.Chat__ServiceAuthentication__Ingress__Enabled -eq 'true' -and $settings.Chat__Identity__Enabled -eq 'true' -and
+                $settings.Chat__Ai__Enabled -eq 'true' -and $settings.Chat__Translation__Enabled -eq 'true') "Retired false availability variables cannot disable required services: $environment"
             Assert-Check ($configuration.services.'chat-redis'.ports.Count -eq 0) "Redis has no host-published port: $environment"
             $rendered = $null
             $configuration = $null

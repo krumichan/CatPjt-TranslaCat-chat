@@ -42,7 +42,6 @@ function Assert-ExistingPair([string]$Name, [string]$Existing) {
 $environmentPairs = @{
     CHAT_GATEWAY_SECRETBASE64 = 'be-to-chat-service-signing-key'
     CHAT_CORE_IDENTITY_SECRETBASE64 = 'chat-to-be-service-signing-key'
-    CHAT_SERVER_API_KEY = 'chat-to-ai-api-key'
     Chat__ServiceAuthentication__Ingress__Base64SigningKey = 'be-to-chat-service-signing-key'
     Chat__Identity__ServiceAuthentication__Base64SigningKey = 'chat-to-be-service-signing-key'
     Chat__Core__ServiceAuthentication__Base64SigningKey = 'chat-to-be-service-signing-key'
@@ -58,18 +57,32 @@ foreach ($name in $environmentPairs.Keys) {
 Assert-ExistingPair 'be-to-chat-service-signing-key' (Read-LiteralProperty $configuration.BeLocalSecretsFile 'chat.gateway.secret-base64')
 Assert-ExistingPair 'chat-to-be-service-signing-key' (Read-LiteralProperty $configuration.BeLocalSecretsFile 'chat.core.identity.secret-base64')
 Assert-ExistingPair 'be-user-jwt-signing-key' (Read-LiteralProperty $configuration.BeLocalSecretsFile 'jwt.token.secret-key')
-if (Test-Path -LiteralPath $configuration.AiEnvironmentFile -PathType Leaf) {
-    $lines = @([IO.File]::ReadAllLines($configuration.AiEnvironmentFile) | Where-Object { $_ -match '^\s*(?:export\s+)?CHAT_SERVER_API_KEY\s*=' })
-    if ($lines.Count -gt 1) { throw 'MISMATCH: duplicate CHAT_SERVER_API_KEY in the existing AI environment file.' }
-    if ($lines.Count -eq 1) {
-        # dotenv의 일반적인 따옴표 한 쌍만 허용한다. escape/interpolation은 Python preflight에서 별도 검사한다.
-        $value = ($lines[0] -split '=', 2)[1].Trim()
-        if ($value.Length -ge 2 -and (($value[0] -eq '"' -and $value[-1] -eq '"') -or ($value[0] -eq "'" -and $value[-1] -eq "'"))) {
-            $value = $value.Substring(1, $value.Length - 2)
-        }
-        Assert-ExistingPair 'chat-to-ai-api-key' $value
+function Read-AiSetting([string]$Name) {
+    $inherited = [Environment]::GetEnvironmentVariable($Name)
+    if (-not [string]::IsNullOrWhiteSpace($inherited)) { return $inherited }
+    if (-not (Test-Path -LiteralPath $configuration.AiEnvironmentFile -PathType Leaf)) { return $null }
+    $pattern = '^\s*(?:export\s+)?' + [regex]::Escape($Name) + '\s*='
+    $lines = @([IO.File]::ReadAllLines($configuration.AiEnvironmentFile) | Where-Object { $_ -match $pattern })
+    if ($lines.Count -gt 1) { throw "MISMATCH: duplicate $Name in the existing AI environment file." }
+    if ($lines.Count -eq 0) { return $null }
+
+    # dotenv의 일반적인 따옴표 한 쌍만 해석한다. 복잡한 보간이나 escape는 추측하지 않는다.
+    $value = ($lines[0] -split '=', 2)[1].Trim()
+    if ($value.Length -ge 2 -and (($value[0] -eq '"' -and $value[-1] -eq '"') -or ($value[0] -eq "'" -and $value[-1] -eq "'"))) {
+        $value = $value.Substring(1, $value.Length - 2)
     }
+    if ($value.Contains('$') -or $value.Contains('\') -or $value -match '\s') {
+        throw "NEEDS_INPUT: existing AI setting $Name requires its resolved literal value. Nothing was replaced."
+    }
+    return $value
 }
+
+# AI 수신자의 현재 인증 모드를 유지한다. legacy는 LL/BE와 같은 SERVER_API_KEY를 사용한다.
+$aiMode = Read-AiSetting 'CHAT_AUTH_MODE'
+if ([string]::IsNullOrWhiteSpace($aiMode)) { $aiMode = 'legacy' }
+if ($aiMode -cnotin @('legacy', 'dedicated', 'dual')) { throw 'MISMATCH: unsupported AI CHAT_AUTH_MODE.' }
+$aiKeyName = if ($aiMode -ceq 'legacy') { 'SERVER_API_KEY' } else { 'CHAT_SERVER_API_KEY' }
+Assert-ExistingPair 'chat-to-ai-api-key' (Read-AiSetting $aiKeyName)
 
 # 누락 신규 방향키만 준비한다. Redis/DB/사용자 JWT는 임의 난수로 대체하지 않는다.
 & (Join-Path $PSScriptRoot 'New-ChatDevelopmentKeys.ps1') -Environment Development -OutputDirectory $secretDirectory -DryRun:$readOnly -ExistingValues $existingValues

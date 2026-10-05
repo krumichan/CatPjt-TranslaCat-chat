@@ -92,6 +92,17 @@ public sealed class FrontendStompClientTests(ChatMySqlFixture fixture)
 
     private static string FindRoot()
     {
+        // 격리 빌드 산출물은 저장소 밖에 둘 수 있다. 명시한 원본 경로도 solution으로 검증한다.
+        var configured = Environment.GetEnvironmentVariable("CHAT_TEST_WORKSPACE");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            if (!Path.IsPathFullyQualified(configured)
+                || !File.Exists(Path.Combine(configured, "CatPjt-TranslaCat-chat.slnx")))
+            {
+                throw new InvalidOperationException("CHAT_TEST_WORKSPACE must be the absolute CHAT source root.");
+            }
+            return Path.GetFullPath(configured);
+        }
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "CatPjt-TranslaCat-chat.slnx")))
         {

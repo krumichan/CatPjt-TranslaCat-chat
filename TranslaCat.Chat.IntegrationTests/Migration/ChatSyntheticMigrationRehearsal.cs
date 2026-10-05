@@ -247,6 +247,17 @@ internal sealed class ChatSyntheticMigrationRehearsal
 
     private static string FindWorkspace()
     {
+        // 검증 산출물이 중앙 폴더에 있을 때도 원본 source와 실제 solution을 명시적으로 연결한다.
+        var configured = Environment.GetEnvironmentVariable("CHAT_TEST_WORKSPACE");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            if (!Path.IsPathFullyQualified(configured)
+                || !File.Exists(Path.Combine(configured, "CatPjt-TranslaCat-chat.slnx")))
+            {
+                throw new InvalidOperationException("CHAT_TEST_WORKSPACE must be the absolute CHAT source root.");
+            }
+            return Path.GetFullPath(configured);
+        }
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
             if (File.Exists(Path.Combine(directory.FullName, "CatPjt-TranslaCat-chat.slnx")))
