@@ -28,8 +28,10 @@ jobs:
         run: docker build --platform linux/amd64 --target runtime -f deploy/oci/Dockerfile -t local/verified:${GITHUB_SHA} .
   release:
     needs: verify
-    # 사용자 Secret 갱신·서비스 순서 확인 후 명시적 dispatch에서만 앱을 전환한다.
-    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    # main의 검증 성공 SHA만 같은 workflow run에서 운영에 반영한다.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 90
