@@ -28,6 +28,29 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaises((d.DeployError,ValueError)): d.validate(c,service)
     def test_valid_ll(self): self.assertEqual(d.validate(config(),'ll')['service'],'ll')
     def test_valid_chat(self): self.assertEqual(d.validate(config('chat'),'chat')['service'],'chat')
+    def test_valid_chat_optional_native_origin(self):
+        # 준비 / 실행: 기존 웹 origin은 그대로 두고 합성 HTTPS IP origin 하나만 추가한다.
+        c=config('chat'); c['native_origin']='https://198.51.100.20'
+        validated=d.validate(c,'chat')
+
+        # 검증
+        self.assertEqual(validated['browser_origin'],c['browser_origin'])
+        self.assertEqual(validated['native_origin'],c['native_origin'])
+    def test_invalid_optional_native_origin_rejected_before_deployment(self):
+        # 준비: 단일 canonical origin 계약과 웹 origin 중복을 거부한다.
+        values=[None,'',' ','*','null','http://native.fixture.invalid','https://native.fixture.invalid/',
+                'https://native.fixture.invalid/path','https://native.fixture.invalid?x=1',
+                'https://native.fixture.invalid#x','https://user:secret@native.fixture.invalid',
+                'https://*.fixture.invalid','https://NATIVE.fixture.invalid','https://native.fixture.invalid:443',
+                'https://native.fixture.invalid,https://other.fixture.invalid','https://frontend.example']
+        for index,value in enumerate(values):
+            with self.subTest(case=index):
+                c=config('chat'); c['native_origin']=value
+
+                # 실행 / 검증: 입력 자체를 오류에 반사하지 않는다.
+                with self.assertRaises(d.DeployError) as raised:
+                    d.validate(c,'chat')
+                self.assertIn(str(raised.exception),('INVALID_NATIVE_ORIGIN','NATIVE_ORIGIN_DUPLICATES_BROWSER'))
     def test_wrong_database(self): self.rejected(lambda c:c['database'].update(name='mysql'))
     def test_wrong_runtime_user(self): self.rejected(lambda c:c['database'].update(username='dbadmin'))
     def test_wrong_migration_user(self): self.rejected(lambda c:c['database'].update(migration_username='dbadmin'))
@@ -73,6 +96,37 @@ class ValidationTests(unittest.TestCase):
             self.assertNotIn(c['database']['migration_password'],(r/'db_connection').read_text())
             self.assertFalse((m/'user_jwt').exists());self.assertFalse((m/'redis_password').exists())
             self.assertIn('SSL_CERT_FILE=/run/config/ca-bundle.pem',(r/'runtime.env').read_text())
+    def test_native_origin_adds_only_one_runtime_record_and_preserves_migration(self):
+        # 준비: 같은 합성 설정에서 선택 origin 유무만 바꾼 두 릴리스를 만든다.
+        with tempfile.TemporaryDirectory() as td,patch.object(d.os,'geteuid',return_value=1000):
+            base=Path(td); c=config('chat'); extra=copy.deepcopy(c)
+            extra['native_origin']='https://198.51.100.20'
+            (base/'before').mkdir(); (base/'after').mkdir()
+            before=d.materialize(c,base/'before'); after=d.materialize(extra,base/'after')
+            before_migration=d.materialize(c,base/'before',True)
+            after_migration=d.materialize(extra,base/'after',True)
+
+            # 검증: 다른 env 행·자격 파일·migration 출력은 바꾸지 않는다.
+            added=b'Chat__Realtime__AllowedOrigins__1=https://198.51.100.20\n'
+            runtime=(after/'runtime.env').read_bytes()
+            self.assertEqual(runtime.count(added),1)
+            self.assertEqual(runtime.replace(added,b''),(before/'runtime.env').read_bytes())
+            self.assertIn(('Chat__Realtime__AllowedOrigins__0='+c['browser_origin']+'\n').encode(),runtime)
+            self.assertEqual((before_migration/'runtime.env').read_bytes(),(after_migration/'runtime.env').read_bytes())
+            for file in before.iterdir():
+                if file.name!='runtime.env':
+                    self.assertEqual(file.read_bytes(),(after/file.name).read_bytes())
+    def test_ll_runtime_and_migration_ignore_chat_native_origin(self):
+        # 준비 / 실행: 공유 배포기의 LL 경로에는 CHAT 선택 origin을 적용하지 않는다.
+        with tempfile.TemporaryDirectory() as td,patch.object(d.os,'geteuid',return_value=1000):
+            c=config(); extra=copy.deepcopy(c); extra['native_origin']='https://native.fixture.invalid'
+            (Path(td)/'before').mkdir(); (Path(td)/'after').mkdir()
+            for migrate in (False,True):
+                before=d.materialize(c,Path(td)/'before',migrate)
+                after=d.materialize(extra,Path(td)/'after',migrate)
+
+                # 검증
+                self.assertEqual((before/'runtime.env').read_bytes(),(after/'runtime.env').read_bytes())
 
 class RedisTests(unittest.TestCase):
     def existing(self,running=True):

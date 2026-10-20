@@ -41,6 +41,42 @@ def origin(value, name):
          u.path in ('','/') and not u.query and not u.fragment, 'HTTPS_ORIGIN_REQUIRED:' + name)
     return value.rstrip('/')
 
+def is_canonical_native_origin(value):
+    # native 입력은 패턴이나 URL 전체가 아닌 정규 HTTPS origin 하나만 허용한다.
+    if not isinstance(value,str) or not value or not value.isascii() or any(ord(c)<=32 or ord(c)>=127 for c in value):
+        return False
+    if '*' in value or '%' in value:
+        return False
+    try:
+        u=urlparse(value); host=u.hostname; port=u.port
+        if u.scheme!='https' or not host or u.username is not None or u.password is not None:
+            return False
+        if u.path or u.params or u.query or u.fragment or port in (0,443):
+            return False
+
+        # IP와 DNS의 대체 표기를 정규화해서 받지 않는다. runtime의 Ordinal 비교와 같은 값을 전달한다.
+        try:
+            address=ipaddress.ip_address(host)
+            canonical_host='['+str(address)+']' if address.version==6 else str(address)
+        except ValueError:
+            labels=host.split('.')
+            if len(host)>253 or len(labels)<2 or labels[-1].isdigit() or re.fullmatch(r'0x[0-9a-f]+',labels[-1]):
+                return False
+            if any(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',label) is None for label in labels):
+                return False
+            canonical_host=host
+        return value=='https://'+canonical_host+(':'+str(port) if port is not None else '')
+    except ValueError:
+        return False
+
+def native_origin(c):
+    if 'native_origin' not in c:
+        return None
+    value=c['native_origin']
+    need(is_canonical_native_origin(value),'INVALID_NATIVE_ORIGIN')
+    need(value!=origin(c['browser_origin'],'browser_origin'),'NATIVE_ORIGIN_DUPLICATES_BROWSER')
+    return value
+
 def signing(value, name):
     one_line(value,name)
     try: raw=base64.b64decode(value,validate=True)
@@ -77,6 +113,7 @@ def validate(c, service):
          c['expected_mysql_ca_sha256'].lower(),'MYSQL_CA_HASH_MISMATCH')
     if service=='chat':
         origin(c['be_url'],'be_url'); origin(c['browser_origin'],'browser_origin')
+        native_origin(c)
         vals=[signing(c[k],k) for k in ('user_jwt_key_base64','ingress_key_base64','identity_key_base64')]
         need(len(set(vals))==3 and c['ai_api_key'] not in vals,'DIRECTION_KEYS_MUST_DIFFER')
         redis=c['redis']; one_line(redis['container_name'],'redis.container_name'); one_line(redis['network'],'redis.network')
@@ -113,6 +150,7 @@ def connection(c, migrate=False):
         'MaximumPoolSize':4,'Connection Timeout':10}.items())+';'
 
 def materialize(c, release, migrate=False):
+    native=native_origin(c) if c['service']=='chat' else None
     service=c['service']; dst=release/('migration' if migrate else 'runtime')
     dst.mkdir(mode=0o700)
     if os.geteuid()==0: os.chown(dst,10001,10001)
@@ -151,6 +189,9 @@ def materialize(c, release, migrate=False):
                 'Chat__ServiceAuthentication__Ingress__Issuer':'translacat-be','Chat__ServiceAuthentication__Ingress__Audience':'translacat-chat',
                 'Chat__ServiceAuthentication__Ingress__Service':'translacat-be','Chat__ServiceAuthentication__Ingress__Base64SigningKey_FILE':'/run/config/ingress_jwt',
                 'SSL_CERT_FILE':'/run/config/ca-bundle.pem','DOTNET_GCHeapHardLimitPercent':'60','DOTNET_PROCESSOR_COUNT':'1'})
+            # 웹 origin의 index0와 다른 env 원문은 유지하고 선택 native origin 한 행만 추가한다.
+            if native is not None:
+                env['Chat__Realtime__AllowedOrigins__1']=native
             for section in ('Identity','Core'):
                 stem='Chat__'+section+'__';env.update({stem+'Enabled':'true',stem+'BaseUrl':c['be_url'],stem+'TimeoutSeconds':'5',
                     stem+'ServiceAuthentication__Issuer':'translacat-chat',stem+'ServiceAuthentication__Audience':'translacat-be',

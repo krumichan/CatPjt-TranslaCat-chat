@@ -9,6 +9,60 @@ def checked(argv, *, env=None, timeout=1800, input=None, show=False):
     if p.returncode: raise RuntimeError('transport command failed: '+argv[0]+' exit='+str(p.returncode))
     return '' if show else p.stdout
 
+def is_canonical_native_origin(value):
+    # native 입력은 패턴이나 URL 전체가 아닌 정규 HTTPS origin 하나만 허용한다.
+    if not isinstance(value,str) or not value or not value.isascii() or any(ord(c)<=32 or ord(c)>=127 for c in value):
+        return False
+    if '*' in value or '%' in value:
+        return False
+    try:
+        u=urlparse(value); host=u.hostname; port=u.port
+        if u.scheme!='https' or not host or u.username is not None or u.password is not None:
+            return False
+        if u.path or u.params or u.query or u.fragment or port in (0,443):
+            return False
+
+        # IP와 DNS의 대체 표기를 정규화해서 받지 않는다. runtime의 Ordinal 비교와 같은 값을 전달한다.
+        try:
+            address=ipaddress.ip_address(host)
+            canonical_host='['+str(address)+']' if address.version==6 else str(address)
+        except ValueError:
+            labels=host.split('.')
+            if len(host)>253 or len(labels)<2 or labels[-1].isdigit() or re.fullmatch(r'0x[0-9a-f]+',labels[-1]):
+                return False
+            if any(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',label) is None for label in labels):
+                return False
+            canonical_host=host
+        return value=='https://'+canonical_host+(':'+str(port) if port is not None else '')
+    except ValueError:
+        return False
+
+def apply_native_origin(c, optional_secret):
+    # LL은 선택 CHAT 입력을 해석하지 않고 기존 config 객체를 그대로 사용한다.
+    if c.get('service') != 'chat':
+        return c
+
+    # 명시한 기존 필드는 별도 Secret으로 복구하지 않는다. 충돌도 조용히 덮어쓰지 않는다.
+    existing = c.get('native_origin')
+    if 'native_origin' in c and not is_canonical_native_origin(existing):
+        raise RuntimeError('INVALID_NATIVE_ORIGIN')
+    if optional_secret != '' and not is_canonical_native_origin(optional_secret):
+        raise RuntimeError('INVALID_CHAT_NATIVE_ORIGIN')
+    if existing and optional_secret and existing != optional_secret:
+        raise RuntimeError('NATIVE_ORIGIN_CONFLICT')
+
+    # browser 원문은 보존한다. 기존 배포 계약이 허용하는 마지막 slash만 비교에서 제외한다.
+    selected = optional_secret if optional_secret else existing
+    browser = c.get('browser_origin')
+    if selected is not None and isinstance(browser, str) and selected == browser.rstrip('/'):
+        raise RuntimeError('NATIVE_ORIGIN_DUPLICATES_BROWSER')
+    if optional_secret == '':
+        return c
+
+    updated = dict(c)
+    updated['native_origin'] = optional_secret
+    return updated
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--service',choices=['ll','chat'],required=True)
     ap.add_argument('--image',required=True);a=ap.parse_args()
@@ -26,6 +80,9 @@ def main():
         config=json.loads(os.environ['RUNTIME_CONFIG_JSON'])
         if config.get('service')!=a.service: raise RuntimeError('runtime service mismatch')
         if urlparse(config.get('public_url','')).hostname!=host: raise RuntimeError('runtime public URL must match OCI_HOST')
+        # CHAT origin 검사는 runtime 파일·키·SSH 처리를 시작하기 전에 끝낸다.
+        if a.service=='chat':
+            config=apply_native_origin(config,os.environ.get('CHAT_NATIVE_ORIGIN',''))
         # Registry identity is derived from this workflow, not from an uploaded password.
         config['registry_user']=os.environ['GITHUB_ACTOR']
         runtime=secret('runtime.json',json.dumps(config,ensure_ascii=False))
