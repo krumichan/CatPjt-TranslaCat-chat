@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TranslaCat.Chat.Infrastructure.Push;
 using TranslaCat.Chat.Application.Messaging;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
 
@@ -81,6 +82,27 @@ public sealed partial class EfChatMessageTransaction
             context.ChatMessageTranslations.AddRange(translations);
             await context.SaveChangesAsync(cancellationToken);
 
+            // 사람 TEXT만 실제 sender ID로 제외한다. OPEN 응답의 익명 DTO는 수신자 판정에 사용하지 않는다.
+            // 이 저장도 바깥 메시지 transaction에 속하므로 실패/취소 시 본문과 함께 rollback된다.
+            if (member.RoomType is "DIRECT" or "GROUP" or "OPEN")
+            {
+                var recipientIds = await context.ChatRoomMembers.AsNoTracking()
+                    .Where(row => row.ChatRoomId == member.ChatRoomId && row.Active && row.DeletedAt == null
+                        && row.UserId != member.UserId && row.JoinedAt <= createdAt)
+                    .Select(row => row.UserId).Distinct().ToListAsync(cancellationToken);
+                var nowUtc = DateTime.UtcNow;
+                context.ChatPushOutbox.AddRange(recipientIds.Select(userId => new ChatPushOutboxEntity
+                {
+                    MessageId = message.Id,
+                    RoomId = message.ChatRoomId,
+                    SenderUserId = member.UserId,
+                    RecipientUserId = userId,
+                    EventId = Guid.NewGuid().ToString("D"),
+                    CreatedAtUtc = nowUtc,
+                    DueAtUtc = nowUtc
+                }));
+                await context.SaveChangesAsync(cancellationToken);
+            }
             // 원본 managed entity처럼 요청 시각을 응답에 유지한다. 저장 후 재조회 값은 DB datetime(6) 정밀도다.
             var stored = new ChatStoredMessage(message.Id, message.ChatRoomId, message.SenderUserId,
                 message.SenderAiMemberId, message.SenderType, message.MessageType, message.Content,

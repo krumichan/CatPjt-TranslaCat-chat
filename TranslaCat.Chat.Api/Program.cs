@@ -1,5 +1,6 @@
 using TranslaCat.Chat.Api.Configuration;
 using TranslaCat.Chat.Api.Core;
+using TranslaCat.Chat.Api.Push;
 using TranslaCat.Chat.Api.Read;
 using TranslaCat.Chat.Api.Realtime;
 using TranslaCat.Chat.Api.Runtime;
@@ -23,6 +24,7 @@ builder.Services.AddChatReadHttp();
 builder.Services.AddChatRuntime(builder.Configuration);
 builder.Services.AddChatServiceAuthentication(builder.Configuration);
 builder.Services.AddChatCore(builder.Configuration, builder.Environment.EnvironmentName);
+builder.Services.AddChatPush(builder.Configuration);
 builder.Services.AddOpenApi();
 
 // 실제 provider와 Options 등록만 검사한다. host/worker/DB/Redis 연결은 시작하지 않는다.

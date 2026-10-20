@@ -63,6 +63,38 @@ def apply_native_origin(c, optional_secret):
     updated['native_origin'] = optional_secret
     return updated
 
+def apply_mobile_push(c, enabled, app_environment, project_id):
+    # LL과 미설정 CHAT은 기존 JSON 객체를 그대로 전달한다. 공개 Actions 설정만 선택적으로 소비한다.
+    if c.get('service') != 'chat' or (enabled == '' and app_environment == '' and project_id == ''):
+        return c
+    if enabled not in ('true','false'):
+        raise RuntimeError('INVALID_CHAT_MOBILE_PUSH_ENABLED')
+    if app_environment not in ('development','preview','production'):
+        raise RuntimeError('INVALID_CHAT_MOBILE_PUSH_ENVIRONMENT')
+    if not isinstance(project_id,str) or re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}',project_id) is None:
+        raise RuntimeError('INVALID_CHAT_MOBILE_PUSH_PROJECT')
+
+    # 원래 설정의 잘못된 값이나 다른 프로젝트/환경을 공개 override로 조용히 복구하지 않는다.
+    # enabled는 명시적 운영 스위치이므로 기존 true를 false로 끄는 전환도 허용한다.
+    if 'mobile_push' in c:
+        existing=c['mobile_push']
+        if (not isinstance(existing,dict)
+                or not set(existing)<= {'enabled','app_environment','project_id'}
+                or type(existing.get('enabled',False)) is not bool):
+            raise RuntimeError('INVALID_EXISTING_CHAT_MOBILE_PUSH')
+        configured='app_environment' in existing or 'project_id' in existing
+        if existing.get('enabled',False) or configured:
+            old_project=existing.get('project_id')
+            if (existing.get('app_environment') not in ('development','preview','production')
+                    or not isinstance(old_project,str)
+                    or re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}',old_project) is None):
+                raise RuntimeError('INVALID_EXISTING_CHAT_MOBILE_PUSH')
+            if existing['app_environment'] != app_environment or old_project != project_id:
+                raise RuntimeError('CHAT_MOBILE_PUSH_CONFIG_CONFLICT')
+
+    updated=dict(c)
+    updated['mobile_push']={'enabled':enabled=='true','app_environment':app_environment,'project_id':project_id}
+    return updated
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--service',choices=['ll','chat'],required=True)
     ap.add_argument('--image',required=True);a=ap.parse_args()
@@ -83,6 +115,8 @@ def main():
         # CHAT origin 검사는 runtime 파일·키·SSH 처리를 시작하기 전에 끝낸다.
         if a.service=='chat':
             config=apply_native_origin(config,os.environ.get('CHAT_NATIVE_ORIGIN',''))
+            config=apply_mobile_push(config,os.environ.get('CHAT_MOBILE_PUSH_ENABLED',''),
+                os.environ.get('CHAT_MOBILE_PUSH_APP_ENVIRONMENT',''),os.environ.get('CHAT_MOBILE_PUSH_PROJECT_ID',''))
         # Registry identity is derived from this workflow, not from an uploaded password.
         config['registry_user']=os.environ['GITHUB_ACTOR']
         runtime=secret('runtime.json',json.dumps(config,ensure_ascii=False))

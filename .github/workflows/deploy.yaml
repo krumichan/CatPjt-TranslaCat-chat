@@ -70,6 +70,9 @@ jobs:
           BE_JUMP_PASSPHRASE: ${{ secrets.BE_JUMP_PASSPHRASE }}
           RUNTIME_CONFIG_JSON: ${{ secrets.RUNTIME_CONFIG_JSON }}
           CHAT_NATIVE_ORIGIN: ${{ secrets.CHAT_NATIVE_ORIGIN }}
+          CHAT_MOBILE_PUSH_ENABLED: ${{ vars.CHAT_MOBILE_PUSH_ENABLED }}
+          CHAT_MOBILE_PUSH_APP_ENVIRONMENT: ${{ vars.CHAT_MOBILE_PUSH_APP_ENVIRONMENT }}
+          CHAT_MOBILE_PUSH_PROJECT_ID: ${{ vars.CHAT_MOBILE_PUSH_PROJECT_ID }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_IMAGE: ${{ steps.image.outputs.ref }}
         run: python3 deploy/oci/ship.py --service chat --image "$RELEASE_IMAGE"

@@ -1,6 +1,11 @@
 {
   "schema_version": 1,
   "service": "chat",
+  "mobile_push": {
+    "enabled": false,
+    "app_environment": "development",
+    "project_id": "00000000-0000-4000-8000-000000000001"
+  },
   "public_url": "https://217.142.244.88:8443",
   "timezone": "REPLACE_VERIFIED_RUNTIME_TIME_ZONE",
   "database": {

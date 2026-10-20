@@ -150,6 +150,36 @@ public sealed class OpenRoomRuntimeTests(ChatMySqlFixture fixture)
     }
 
     [Fact]
+    public async Task Public_room_appears_in_another_users_blank_explore_and_accepts_join()
+    {
+        // 준비: 한 계정이 링크 공개 방과 탐색 공개 방을 만든다.
+        long owner = UserId();
+        long visitor = owner + 1;
+        await using var host = await HostAsync();
+        var unlisted = await CreateAsync(host, owner, "synthetic unlisted", "UNLISTED");
+        var publicRoom = await CreateAsync(host, owner, "synthetic public", "PUBLIC");
+        long unlistedId = unlisted.GetProperty("id").GetInt64();
+        long publicId = publicRoom.GetProperty("id").GetInt64();
+
+        // 실행: 다른 계정이 빈 검색어로 탐색하고 공개 방에 참여한다.
+        var page = await GetAsync(host, visitor, "/api/v1/chat/open-rooms?size=20");
+        var listed = page.GetProperty("openChatRooms").EnumerateArray().ToArray();
+        var detail = await GetAsync(host, visitor, $"/api/v1/chat/open-rooms/{publicId}");
+        using var joinedResponse = await SendAsync(host, visitor, HttpMethod.Post,
+            $"/api/v1/chat/open-rooms/{publicId}/join", "{\"profile\":{\"nickname\":\"visitor\"}}");
+
+        // 검증: 링크 공개 방은 목록에서 제외하고 공개 방만 가입 가능하다.
+        Assert.Contains(listed, room => room.GetProperty("id").GetInt64() == publicId);
+        Assert.DoesNotContain(listed, room => room.GetProperty("id").GetInt64() == unlistedId);
+        Assert.Equal("PUBLIC", detail.GetProperty("visibility").GetString());
+        Assert.True(detail.GetProperty("joinable").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, joinedResponse.StatusCode);
+        var joined = await BodyAsync(joinedResponse);
+        Assert.True(joined.GetProperty("joined").GetBoolean());
+        Assert.Equal("MEMBER", joined.GetProperty("myRole").GetString());
+    }
+
+    [Fact]
     public async Task Banned_user_sees_public_owner_in_list_but_not_detail_or_member_profiles()
     {
         // 준비

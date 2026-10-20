@@ -29,7 +29,7 @@ public sealed class ChatPersistenceTests(ChatMySqlFixture fixture)
         Assert.Equal(before, after);
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
         Assert.False(context.Database.HasPendingModelChanges());
-        Assert.Equal(14, tables);
+        Assert.Equal(16, tables);
         Assert.Equal(0, foreign);
         Assert.Equal(3, indexes);
     }

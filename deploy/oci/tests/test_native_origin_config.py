@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 HERE=Path(__file__).resolve().parents[1]
 SELECTED={'DeployError','need','one_line','origin','is_canonical_native_origin','native_origin',
-          'env_text','connection','write','materialize'}
+          'env_text','connection','write','materialize','mobile_push'}
 
 
 def source_namespace():

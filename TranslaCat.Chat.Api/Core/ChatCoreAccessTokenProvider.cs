@@ -9,7 +9,7 @@ namespace TranslaCat.Chat.Api.Core;
 public sealed class ChatCoreAccessTokenProvider(ChatServiceTokenSettings settings, string environment, TimeProvider clock)
     : IChatCoreAccessTokenProvider
 {
-    private static readonly HashSet<string> Scopes = ["chat:accounts:read", "chat:relations:read", "chat:storage:read", "chat:storage:write", "chat:storage:delete"];
+    private static readonly HashSet<string> Scopes = ["chat:accounts:read", "chat:relations:read", "chat:storage:read", "chat:storage:write", "chat:storage:delete", "chat:push-targets:read", "chat:push-installations:invalidate"];
 
     public string CreateToken(string scope)
     {

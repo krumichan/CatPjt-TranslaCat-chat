@@ -77,6 +77,21 @@ def native_origin(c):
     need(value!=origin(c['browser_origin'],'browser_origin'),'NATIVE_ORIGIN_DUPLICATES_BROWSER')
     return value
 
+def mobile_push(c):
+    # 미구성은 기존 disabled 동작을 유지한다. 비밀이나 CLI 자격을 공개 rollout 설정에 섞지 않는다.
+    if 'mobile_push' not in c:
+        return None
+    value=c['mobile_push']
+    need(isinstance(value,dict) and set(value)<= {'enabled','app_environment','project_id'},'INVALID_MOBILE_PUSH')
+    enabled=value.get('enabled',False)
+    need(type(enabled) is bool,'INVALID_MOBILE_PUSH_ENABLED')
+    configured='app_environment' in value or 'project_id' in value
+    if enabled or configured:
+        need(value.get('app_environment') in ('development','preview','production'),'INVALID_MOBILE_PUSH_ENVIRONMENT')
+        project=value.get('project_id')
+        need(isinstance(project,str) and re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}',project) is not None,
+             'INVALID_MOBILE_PUSH_PROJECT')
+    return dict(value,enabled=enabled)
 def signing(value, name):
     one_line(value,name)
     try: raw=base64.b64decode(value,validate=True)
@@ -114,6 +129,7 @@ def validate(c, service):
     if service=='chat':
         origin(c['be_url'],'be_url'); origin(c['browser_origin'],'browser_origin')
         native_origin(c)
+        mobile_push(c)
         vals=[signing(c[k],k) for k in ('user_jwt_key_base64','ingress_key_base64','identity_key_base64')]
         need(len(set(vals))==3 and c['ai_api_key'] not in vals,'DIRECTION_KEYS_MUST_DIFFER')
         redis=c['redis']; one_line(redis['container_name'],'redis.container_name'); one_line(redis['network'],'redis.network')
@@ -151,6 +167,7 @@ def connection(c, migrate=False):
 
 def materialize(c, release, migrate=False):
     native=native_origin(c) if c['service']=='chat' else None
+    push=mobile_push(c) if c['service']=='chat' else None
     service=c['service']; dst=release/('migration' if migrate else 'runtime')
     dst.mkdir(mode=0o700)
     if os.geteuid()==0: os.chown(dst,10001,10001)
@@ -192,6 +209,12 @@ def materialize(c, release, migrate=False):
             # 웹 origin의 index0와 다른 env 원문은 유지하고 선택 native origin 한 행만 추가한다.
             if native is not None:
                 env['Chat__Realtime__AllowedOrigins__1']=native
+            # CHAT 런타임에만 공개 push rollout 값을 영속화한다. migration에는 worker 설정을 전달하지 않는다.
+            if push is not None:
+                env['Chat__Push__Enabled']='true' if push['enabled'] else 'false'
+                if 'app_environment' in push:
+                    env['Chat__Push__AppEnvironment']=push['app_environment']
+                    env['Chat__Push__ProjectId']=push['project_id']
             for section in ('Identity','Core'):
                 stem='Chat__'+section+'__';env.update({stem+'Enabled':'true',stem+'BaseUrl':c['be_url'],stem+'TimeoutSeconds':'5',
                     stem+'ServiceAuthentication__Issuer':'translacat-chat',stem+'ServiceAuthentication__Audience':'translacat-be',

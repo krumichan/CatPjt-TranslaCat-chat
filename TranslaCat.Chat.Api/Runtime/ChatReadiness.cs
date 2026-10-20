@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TranslaCat.Chat.Infrastructure.Push;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using TranslaCat.Chat.Api.Authentication;
@@ -126,6 +127,7 @@ public static class ChatReadiness
             aiStorage = aiStorageConfigured ? "CONFIGURED_NOT_PROBED" : "NOT_CONFIGURED",
             imageUploads = imageUploadsConfigured ? "CONFIGURED_NOT_PROBED" : "NOT_CONFIGURED",
             translation = translationConfigured ? "CONFIGURED_NOT_PROBED" : "NOT_CONFIGURED",
+            push = services.GetService<ChatPushOptions>()?.Enabled == true ? "CONFIGURED_NOT_PROBED" : "DISABLED",
             ai = aiConfigured ? "CONFIGURED_NOT_PROBED" : "NOT_CONFIGURED"
         }, statusCode: ready ? 200 : 503);
     }

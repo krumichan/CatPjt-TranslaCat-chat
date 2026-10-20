@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TranslaCat.Chat.Infrastructure.Push;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence;
@@ -19,6 +20,9 @@ public sealed class ChatDbContext(DbContextOptions<ChatDbContext> options) : DbC
     public DbSet<ChatRoomAiActivityEntity> ChatRoomAiActivities => Set<ChatRoomAiActivityEntity>();
     public DbSet<ChatAiSystemSettingEntity> ChatAiSystemSettings => Set<ChatAiSystemSettingEntity>();
     public DbSet<ChatNotificationEntity> ChatNotifications => Set<ChatNotificationEntity>();
+
+    public DbSet<ChatPushOutboxEntity> ChatPushOutbox => Set<ChatPushOutboxEntity>();
+    public DbSet<ChatPushDeliveryEntity> ChatPushDeliveries => Set<ChatPushDeliveryEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

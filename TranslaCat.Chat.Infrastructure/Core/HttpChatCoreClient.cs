@@ -18,6 +18,59 @@ public sealed class HttpChatCoreClient(HttpClient client, ChatCoreHttpSettings s
         MaxDepth = 12
     };
 
+    public async Task<ChatCorePushTargets> PushTargetsAsync(
+        long[] userIds, string appEnvironment, string projectId, CancellationToken token)
+    {
+        // 내부 registry는 public 응답 envelope가 없는 별도 계약이다. 요청/응답 경계를 모두 제한한다.
+        if (userIds.Length is < 1 or > 100 || userIds.Any(id => id <= 0) || userIds.Distinct().Count() != userIds.Length
+            || appEnvironment is not ("development" or "preview" or "production")
+            || !Guid.TryParseExact(projectId, "D", out var project) || project.ToString("D") != projectId)
+        {
+            throw new ChatCoreUnavailableException();
+        }
+
+        var result = await JsonAsync<ChatCorePushTargets>("/internal/v1/chat/push-targets/query", "chat:push-targets:read",
+            new { userIds, appEnvironment, projectId }, token);
+        if (result.Targets is null || result.Targets.Count > userIds.Length * 10
+            || result.Targets.Any(target => target is null || !userIds.Contains(target.UserId) || !ValidPushTarget(target))
+            || result.Targets.Select(target => target.InstallationId).Distinct(StringComparer.Ordinal).Count() != result.Targets.Count)
+        {
+            throw new ChatCoreUnavailableException();
+        }
+
+        return result;
+    }
+
+    public async Task InvalidatePushAsync(string installationId, string accountBindingId, long generation, long tokenVersion, CancellationToken token)
+    {
+        if (!Guid.TryParseExact(installationId, "D", out var installation) || installation.ToString("D") != installationId
+            || accountBindingId is not { Length: >= 1 and <= 128 }
+            || !accountBindingId.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+            || generation is <= 0 or > 9007199254740991 || tokenVersion is <= 0 or > 9007199254740991)
+            throw new ChatCoreUnavailableException();
+
+        // receipt에 기록된 네 값 전체를 전달한다. 갱신된 설치를 지우는 광범위 revoke는 하지 않는다.
+        using var request = Request(HttpMethod.Post, "/internal/v1/chat/push-installations/invalidate",
+            "chat:push-installations:invalidate", JsonContent.Create(new
+            {
+                installationId, accountBindingId, generation, tokenVersion
+            }));
+        await EmptyAsync(request, token);
+    }
+
+    private static bool ValidPushTarget(ChatCorePushTarget target)
+    {
+        return target.UserId > 0 && Guid.TryParseExact(target.InstallationId, "D", out var installation)
+            && installation.ToString("D") == target.InstallationId
+            && target.AccountBindingId is { Length: >= 1 and <= 128 }
+            && target.AccountBindingId.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+            && target.Generation is > 0 and <= 9007199254740991
+            && target.TokenVersion is > 0 and <= 9007199254740991
+            && target.Platform is "android" or "ios"
+            && target.ExpoPushToken is { Length: >= 1 and <= 275 }
+            && System.Text.RegularExpressions.Regex.IsMatch(target.ExpoPushToken,
+                @"\A(?:ExpoPushToken|ExponentPushToken)\[[A-Za-z0-9_-]{1,256}\]\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    }
     public Task<ChatCoreAccounts> AccountsAsync(long[] userIds, string[] publicIds, CancellationToken token)
     {
         return JsonAsync<ChatCoreAccounts>("/internal/v1/chat/accounts/lookup", "chat:accounts:read", new
