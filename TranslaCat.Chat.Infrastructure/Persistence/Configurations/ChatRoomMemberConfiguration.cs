@@ -55,6 +55,15 @@ internal sealed class ChatRoomMemberConfiguration : IEntityTypeConfiguration<Cha
             .HasColumnName("active")
             .HasColumnType("bit(1)");
 
+        builder.Property(entity => entity.NotificationMuted)
+            .HasColumnName("notification_muted")
+            .HasColumnType("bit(1)")
+            .HasDefaultValue(false);
+
+        builder.Property(entity => entity.NotificationEnabledSinceUtc)
+            .HasColumnName("notification_enabled_since_utc")
+            .HasColumnType("datetime(6)");
+
         builder.Property(entity => entity.JoinedAt)
             .HasColumnName("joined_at")
             .HasColumnType("datetime(6)");

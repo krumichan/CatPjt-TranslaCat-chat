@@ -34,7 +34,7 @@ public sealed class ChatSyntheticMigrationRehearsalTests
         Assert.Equal(14, expected.Count);
         Assert.All(expected, table => Assert.True(table.Count > 0));
         // 이 리허설의 복사 범위는 기존 14개다. 이후 추가된 5개 queue/gate는 별도 빈 테이블로 명시한다.
-        Assert.Equal(19, source.Model.GetEntityTypes().Count());
+        Assert.Equal(20, source.Model.GetEntityTypes().Count());
         await AssertEmptyPushTablesAsync(source);
 
         // 실행 / 검증: 일부 parent table 저장 후 합성 실패를 발생시켜 전체 target transaction rollback을 확인한다.
@@ -101,6 +101,7 @@ public sealed class ChatSyntheticMigrationRehearsalTests
         Assert.False(await context.OpenInvitationPushOutbox.AnyAsync());
         Assert.False(await context.OpenInvitationPushDeliveries.AnyAsync());
         Assert.False(await context.OpenInvitationSenderGates.AnyAsync());
+        Assert.False(await context.ChatNotificationPreferences.AnyAsync());
     }
 
     [Theory]

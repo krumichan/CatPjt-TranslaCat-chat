@@ -84,6 +84,10 @@ public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> c
 
         await using var db = await contexts.CreateDbContextAsync(token);
 
+        // 초대 수신함은 보존하고 전역 push 정책만 적용한다. 비참여자 초대에 방별 mute를 적용하지 않는다.
+        if (await db.ChatNotificationPreferences.AnyAsync(row => row.UserId == job.RecipientUserId
+            && (!row.PushEnabled || (row.EnabledSinceUtc != null && row.EnabledSinceUtc > job.CreatedAtUtc)), token)) return false;
+
         // push identity를 원본 알림과 대조한다. 이미 확인한 초대나 지워진 알림은 다시 울리지 않는다.
         var notification = await db.ChatNotifications.AsNoTracking().SingleOrDefaultAsync(row =>
             row.Id == job.NotificationId && row.RecipientUserId == job.RecipientUserId

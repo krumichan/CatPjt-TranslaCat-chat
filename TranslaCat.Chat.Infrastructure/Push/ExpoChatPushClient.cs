@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace TranslaCat.Chat.Infrastructure.Push;
 
@@ -11,7 +12,8 @@ public sealed record ExpoPushPayload(
     string Body,
     string ChannelId,
     string Sound,
-    ExpoPushData Data);
+    ExpoPushData Data,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Badge = null);
 
 public sealed record ExpoPushData(
     int SchemaVersion,
@@ -26,7 +28,8 @@ public sealed record ExpoOpenInvitationPushPayload(
     string Body,
     string ChannelId,
     string Sound,
-    ExpoOpenInvitationPushData Data);
+    ExpoOpenInvitationPushData Data,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Badge = null);
 
 public sealed record ExpoOpenInvitationPushData(
     int SchemaVersion,

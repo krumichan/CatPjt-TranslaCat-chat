@@ -1,10 +1,11 @@
 using System.Globalization;
 using TranslaCat.Chat.Application.Core;
+using TranslaCat.Chat.Application.Notifications;
 using TranslaCat.Chat.Infrastructure.Core;
 
 namespace TranslaCat.Chat.Infrastructure.Push;
 
-public sealed class OpenInvitationPushProcessor(IOpenInvitationPushStore store, HttpChatCoreClient core, ExpoChatPushClient expo, ChatPushOptions options)
+public sealed class OpenInvitationPushProcessor(IOpenInvitationPushStore store, HttpChatCoreClient core, ExpoChatPushClient expo, ChatPushOptions options, IChatNotificationStore? notifications = null)
 {
     public async Task SweepAsync(CancellationToken token)
     {
@@ -75,6 +76,14 @@ public sealed class OpenInvitationPushProcessor(IOpenInvitationPushStore store, 
             }
 
             var outbox = await store.OutboxAsync(job.OutboxId, token);
+
+            // off/mute 작업에는 요약 조회도 하지 않는다. badge는 수신자당 한 번 읽고 그 뒤 binding·정책을 재확인한다.
+            if (!await store.EligibleAsync(outbox, token))
+            {
+                await store.FinishDeliveryAsync(job, "SUPPRESSED", 0, null, false, token);
+                return;
+            }
+            int? badge = await ChatPushBadge.ReadAsync(notifications, outbox.RecipientUserId, token);
             var targets = await core.PushTargetsAsync([outbox.RecipientUserId], options.AppEnvironment!, options.ProjectId!, token);
             var target = targets.Targets.SingleOrDefault(value => Matches(job, value));
             if (target is null || !await EligibleAsync(outbox, token))
@@ -86,7 +95,7 @@ public sealed class OpenInvitationPushProcessor(IOpenInvitationPushStore store, 
             // 마지막 정책 조회 뒤 lease 소유권을 재확인한다. 이미 provider에 넘긴 초대는 회수할 수 없다.
             // ticket 저장 전 프로세스가 종료되면 재전송될 수 있다. eventId는 유지하며 정확히 한 번 전달을 주장하지 않는다.
             if (!await store.RefreshTargetAsync(job, target, token) || !await store.OwnsDeliveryAsync(job, token)) return;
-            var payload = Payload(outbox, target);
+            var payload = Payload(outbox, target) with { Badge = badge };
             var result = await expo.SendAsync(payload, token);
             await ApplyResultAsync(job, result, false, token);
         }

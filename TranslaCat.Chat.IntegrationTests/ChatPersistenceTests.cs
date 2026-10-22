@@ -30,7 +30,9 @@ public sealed class ChatPersistenceTests(ChatMySqlFixture fixture)
         Assert.Equal(before, after);
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
         Assert.False(context.Database.HasPendingModelChanges());
-        Assert.Equal(19, tables);
+        Assert.Equal(20, tables);
+        Assert.Equal(1, await QueryLongAsync("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='chat_notification_preference'"));
+        Assert.Equal(2, await QueryLongAsync("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='chat_room_member' AND COLUMN_NAME IN ('notification_muted','notification_enabled_since_utc')"));
         Assert.Equal(3, invitationTables);
         Assert.Equal(0, foreign);
         Assert.Equal(3, indexes);

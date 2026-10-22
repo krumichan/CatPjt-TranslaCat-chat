@@ -77,6 +77,10 @@ public sealed class EfChatPushStore(IDbContextFactory<ChatDbContext> contexts, C
     {
         await using var db = await contexts.CreateDbContextAsync(token);
 
+        // 전역 off와 다시 켜기 이전의 대기 알림을 차단한다. 읽음·멤버십 데이터는 바꾸지 않는다.
+        if (await db.ChatNotificationPreferences.AnyAsync(row => row.UserId == job.RecipientUserId
+            && (!row.PushEnabled || (row.EnabledSinceUtc != null && row.EnabledSinceUtc > job.CreatedAtUtc)), token)) return false;
+
         // 현재 읽음 cursor, 재가입 시각, 삭제/방 종료/OPEN ban을 실제 조회 규칙으로 다시 확인한다.
         return await (from message in db.ChatMessages
                       join room in db.ChatRooms on message.ChatRoomId equals room.Id
@@ -88,6 +92,8 @@ public sealed class EfChatPushStore(IDbContextFactory<ChatDbContext> contexts, C
                           && room.Active && room.DeletedAt == null
                           && (room.RoomType == "DIRECT" || room.RoomType == "GROUP" || room.RoomType == "OPEN")
                           && member.UserId == job.RecipientUserId && member.Active && member.DeletedAt == null
+                          && !member.NotificationMuted
+                          && (member.NotificationEnabledSinceUtc == null || member.NotificationEnabledSinceUtc <= job.CreatedAtUtc)
                           && member.JoinedAt <= message.CreatedAt
                           && (member.LastReadMessageId == null || member.LastReadMessageId < message.Id)
                           && (room.RoomType != "OPEN" ||

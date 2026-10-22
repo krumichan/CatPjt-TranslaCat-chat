@@ -249,6 +249,68 @@ public sealed class OpenInvitationPushProcessorTests
         Assert.Equal("synthetic_binding", body.RootElement.GetProperty("accountBindingId").GetString());
     }
 
+    [Fact]
+    public async Task Eligible_send_uses_one_recipient_summary_and_keeps_receipt_without_another_query()
+    {
+        // 준비
+        var store = new MemoryStore();
+        var summary = new BadgeSummaryStore();
+        using var fixture = new Fixture(store, summary);
+
+        // 실행
+        await fixture.Processor.SweepAsync(default);
+        await fixture.Processor.SweepAsync(default);
+
+        // 검증
+        Assert.Equal(1, summary.Calls);
+        Assert.Equal(22, summary.UserId);
+        Assert.Equal(1, fixture.SendCount);
+        using var payload = JsonDocument.Parse(Assert.Single(fixture.Payloads));
+        Assert.Equal(5, payload.RootElement[0].GetProperty("badge").GetInt32());
+    }
+
+    [Fact]
+    public async Task Ineligible_send_skips_summary_and_changed_policy_during_summary_prevents_provider_send()
+    {
+        // 준비: 확장 뒤 무음/읽음이 되면 badge 집계까지 생략한다.
+        var muted = new MemoryStore();
+        var skipped = new BadgeSummaryStore();
+        using var first = new Fixture(muted, skipped);
+        muted.OnExpanded = () => muted.Eligible = false;
+
+        // 실행 / 검증
+        await first.Processor.SweepAsync(default);
+        Assert.Equal(0, skipped.Calls);
+        Assert.Equal(0, first.SendCount);
+
+        // 준비: 요약 조회 중 정책이 변해도 마지막 정책 확인에서 전송을 막는다.
+        var changed = new MemoryStore();
+        var summary = new BadgeSummaryStore { OnRead = () => changed.Eligible = false };
+        using var second = new Fixture(changed, summary);
+
+        // 실행 / 검증
+        await second.Processor.SweepAsync(default);
+        Assert.Equal(1, summary.Calls);
+        Assert.Equal(0, second.SendCount);
+    }
+
+    [Fact]
+    public async Task Binding_changed_during_summary_is_rechecked_before_send()
+    {
+        // 준비
+        var store = new MemoryStore();
+        var summary = new BadgeSummaryStore();
+        using var fixture = new Fixture(store, summary);
+        summary.OnRead = () => fixture.CurrentTarget = Target() with { AccountBindingId = "changed-binding" };
+
+        // 실행
+        await fixture.Processor.SweepAsync(default);
+
+        // 검증
+        Assert.Equal(1, summary.Calls);
+        Assert.Equal(0, fixture.SendCount);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly HttpClient coreHttp;
@@ -269,7 +331,7 @@ public sealed class OpenInvitationPushProcessorTests
         public List<string> Invalidations { get; } = [];
         public OpenInvitationPushProcessor Processor { get; }
 
-        public Fixture(MemoryStore store)
+        public Fixture(MemoryStore store, BadgeSummaryStore? summaries = null)
         {
             var options = new ChatPushOptions { AppEnvironment = "development", ProjectId = "55b79b33-07b9-4d4b-a3f8-cf24ea76b139" };
             Options = options;
@@ -303,7 +365,7 @@ public sealed class OpenInvitationPushProcessorTests
                 object receipt = ReceiptError is null ? new { status = "ok" } : new { status = "error", details = new { error = ReceiptError } };
                 return Json(new { data = new Dictionary<string, object> { ["synthetic-ticket"] = receipt } });
             }));
-            Processor = new(store, new(coreHttp, new(new Uri("https://synthetic.invalid"), TimeSpan.FromSeconds(1)), new Tokens()), new(expoHttp, options), options);
+            Processor = new(store, new(coreHttp, new(new Uri("https://synthetic.invalid"), TimeSpan.FromSeconds(1)), new Tokens()), new(expoHttp, options), options, summaries);
         }
         public void Dispose() { coreHttp.Dispose(); expoHttp.Dispose(); }
     }
