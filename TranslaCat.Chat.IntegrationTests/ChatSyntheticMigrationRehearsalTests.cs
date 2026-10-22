@@ -33,7 +33,9 @@ public sealed class ChatSyntheticMigrationRehearsalTests
         var expected = await ChatSyntheticMigrationRehearsal.DigestsAsync(source);
         Assert.Equal(14, expected.Count);
         Assert.All(expected, table => Assert.True(table.Count > 0));
-        Assert.Equal(14, source.Model.GetEntityTypes().Count());
+        // 이 리허설의 복사 범위는 기존 14개다. 이후 추가된 5개 queue/gate는 별도 빈 테이블로 명시한다.
+        Assert.Equal(19, source.Model.GetEntityTypes().Count());
+        await AssertEmptyPushTablesAsync(source);
 
         // 실행 / 검증: 일부 parent table 저장 후 합성 실패를 발생시켜 전체 target transaction rollback을 확인한다.
         var injected = await Assert.ThrowsAsync<InvalidOperationException>(() => rehearsal.CopyAsync(failAfterRoomMembers: true));
@@ -47,6 +49,7 @@ public sealed class ChatSyntheticMigrationRehearsalTests
         await rehearsal.CopyAsync();
         await using var target = rehearsal.Target();
         var actual = await ChatSyntheticMigrationRehearsal.DigestsAsync(target);
+        await AssertEmptyPushTablesAsync(target);
 
         // 검증: count와 모든 scalar의 정렬 digest로 14개 table을 비교하며 중요한 nullable/정밀도를 직접 확인한다.
         Assert.Equal(expected, actual);
@@ -86,7 +89,18 @@ public sealed class ChatSyntheticMigrationRehearsalTests
         await using var finalTarget = rehearsal.Target();
         Assert.Equal(expected, await ChatSyntheticMigrationRehearsal.DigestsAsync(finalTarget));
         Assert.Equal(expected, await ChatSyntheticMigrationRehearsal.DigestsAsync(source));
+        await AssertEmptyPushTablesAsync(finalTarget);
+        await AssertEmptyPushTablesAsync(source);
         await rehearsal.RecordAsync("VERIFIED_SYNTHETIC_ONLY_PRESERVED", actual);
+    }
+
+    private static async Task AssertEmptyPushTablesAsync(ChatDbContext context)
+    {
+        Assert.False(await context.ChatPushOutbox.AnyAsync());
+        Assert.False(await context.ChatPushDeliveries.AnyAsync());
+        Assert.False(await context.OpenInvitationPushOutbox.AnyAsync());
+        Assert.False(await context.OpenInvitationPushDeliveries.AnyAsync());
+        Assert.False(await context.OpenInvitationSenderGates.AnyAsync());
     }
 
     [Theory]

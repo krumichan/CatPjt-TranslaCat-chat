@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Infrastructure.Push;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
+using TranslaCat.Chat.Infrastructure.Persistence.OpenInvitations;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence;
 
@@ -23,6 +24,9 @@ public sealed class ChatDbContext(DbContextOptions<ChatDbContext> options) : DbC
 
     public DbSet<ChatPushOutboxEntity> ChatPushOutbox => Set<ChatPushOutboxEntity>();
     public DbSet<ChatPushDeliveryEntity> ChatPushDeliveries => Set<ChatPushDeliveryEntity>();
+    public DbSet<OpenInvitationPushOutboxEntity> OpenInvitationPushOutbox => Set<OpenInvitationPushOutboxEntity>();
+    public DbSet<OpenInvitationPushDeliveryEntity> OpenInvitationPushDeliveries => Set<OpenInvitationPushDeliveryEntity>();
+    public DbSet<OpenInvitationSenderGateEntity> OpenInvitationSenderGates => Set<OpenInvitationSenderGateEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

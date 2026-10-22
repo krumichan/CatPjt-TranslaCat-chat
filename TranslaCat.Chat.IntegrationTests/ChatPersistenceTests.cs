@@ -21,15 +21,17 @@ public sealed class ChatPersistenceTests(ChatMySqlFixture fixture)
         await context.Database.MigrateAsync();
         var after = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
         var tables = await QueryLongAsync("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME <> '__EFMigrationsHistory'");
-        var foreign = await QueryLongAsync("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL AND (REFERENCED_TABLE_SCHEMA <> DATABASE() OR REFERENCED_TABLE_NAME NOT LIKE '%chat%')");
+        var foreign = await QueryLongAsync("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL AND (REFERENCED_TABLE_SCHEMA <> DATABASE() OR (REFERENCED_TABLE_NAME NOT LIKE '%chat%' AND REFERENCED_TABLE_NAME <> 'open_invitation_push_outbox'))");
         var indexes = await QueryLongAsync("SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='chat_message' AND INDEX_NAME IN ('idx_chat_message_room_created_id','idx_chat_message_room_id_id','uk_chat_message_ai_request_id')");
+        var invitationTables = await QueryLongAsync("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('chat_open_invitation_sender_gate','open_invitation_push_outbox','open_invitation_push_delivery')");
 
         // 검증
         Assert.NotEmpty(before);
         Assert.Equal(before, after);
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
         Assert.False(context.Database.HasPendingModelChanges());
-        Assert.Equal(16, tables);
+        Assert.Equal(19, tables);
+        Assert.Equal(3, invitationTables);
         Assert.Equal(0, foreign);
         Assert.Equal(3, indexes);
     }

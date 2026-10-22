@@ -432,6 +432,9 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("uk_chat_notification_recipient_type_source");
 
+                    b.HasIndex(new[] { "ActorUserId", "SourceEventKey" }, "idx_chat_notification_actor_source")
+                        .HasDatabaseName("idx_chat_notification_actor_source");
+
                     b.ToTable("chat_notification", (string)null);
                 });
 
@@ -1110,6 +1113,21 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Migrations
                     b.ToTable("user_chat_language_setting", (string)null);
                 });
 
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Persistence.OpenInvitations.OpenInvitationSenderGateEntity", b =>
+                {
+                    b.Property<long>("ActorUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<DateTime>("TouchedAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("touched_at_utc");
+
+                    b.HasKey("ActorUserId");
+
+                    b.ToTable("chat_open_invitation_sender_gate", (string)null);
+                });
+
             modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Push.ChatPushDeliveryEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -1128,9 +1146,6 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Migrations
                         .HasColumnType("int")
                         .HasColumnName("attempts");
 
-                    b.Property<DateTime?>("ReceiptExpiresAtUtc")
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("receipt_expires_at_utc");
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime(6)")
                         .HasColumnName("created_at_utc");
@@ -1163,6 +1178,10 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Migrations
                     b.Property<long>("OutboxId")
                         .HasColumnType("bigint")
                         .HasColumnName("outbox_id");
+
+                    b.Property<DateTime?>("ReceiptExpiresAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("receipt_expires_at_utc");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1260,6 +1279,166 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_chat_push_outbox_due");
 
                     b.ToTable("chat_push_outbox", (string)null);
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Push.OpenInvitationPushDeliveryEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AccountBindingId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasColumnName("account_binding_id")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTime>("DueAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("due_at_utc");
+
+                    b.Property<long>("Generation")
+                        .HasColumnType("bigint")
+                        .HasColumnName("generation");
+
+                    b.Property<string>("InstallationId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("installation_id")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<DateTime?>("LeaseExpiresAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<string>("LeaseToken")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("lease_token")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<long>("OutboxId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("outbox_id");
+
+                    b.Property<DateTime?>("ReceiptExpiresAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("receipt_expires_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TicketId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasColumnName("ticket_id")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<long>("TokenVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("token_version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OutboxId", "InstallationId")
+                        .IsUnique()
+                        .HasDatabaseName("uk_open_invitation_push_outbox_installation");
+
+                    b.HasIndex("Status", "DueAtUtc", "LeaseExpiresAtUtc", "Id")
+                        .HasDatabaseName("idx_open_invitation_push_delivery_due");
+
+                    b.ToTable("open_invitation_push_delivery", (string)null);
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Push.OpenInvitationPushOutboxEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTime>("DueAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("due_at_utc");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("event_id")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<DateTime?>("LeaseExpiresAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<string>("LeaseToken")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("lease_token")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<long>("NotificationId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("notification_id");
+
+                    b.Property<long>("RecipientUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recipient_user_id");
+
+                    b.Property<long>("RoomId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("room_id");
+
+                    b.Property<long>("SenderUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sender_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId")
+                        .IsUnique()
+                        .HasDatabaseName("uk_open_invitation_push_event");
+
+                    b.HasIndex("NotificationId")
+                        .IsUnique()
+                        .HasDatabaseName("uk_open_invitation_push_notification");
+
+                    b.HasIndex("SenderUserId", "CreatedAtUtc")
+                        .HasDatabaseName("idx_open_invitation_push_sender_time");
+
+                    b.HasIndex("Status", "DueAtUtc", "LeaseExpiresAtUtc", "Id")
+                        .HasDatabaseName("idx_open_invitation_push_outbox_due");
+
+                    b.ToTable("open_invitation_push_outbox", (string)null);
                 });
 
             modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Persistence.Entities.ChatMessageEntity", b =>
@@ -1393,6 +1572,24 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Migrations
                     b.HasOne("TranslaCat.Chat.Infrastructure.Persistence.Entities.ChatMessageEntity", null)
                         .WithMany()
                         .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Push.OpenInvitationPushDeliveryEntity", b =>
+                {
+                    b.HasOne("TranslaCat.Chat.Infrastructure.Push.OpenInvitationPushOutboxEntity", null)
+                        .WithMany()
+                        .HasForeignKey("OutboxId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Push.OpenInvitationPushOutboxEntity", b =>
+                {
+                    b.HasOne("TranslaCat.Chat.Infrastructure.Persistence.Entities.ChatNotificationEntity", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -20,6 +20,22 @@ public sealed record ExpoPushData(
     string MessageId,
     string AccountBindingId);
 
+public sealed record ExpoOpenInvitationPushPayload(
+    string To,
+    string Title,
+    string Body,
+    string ChannelId,
+    string Sound,
+    ExpoOpenInvitationPushData Data);
+
+public sealed record ExpoOpenInvitationPushData(
+    int SchemaVersion,
+    string Kind,
+    string EventId,
+    string NotificationId,
+    string RoomId,
+    string AccountBindingId);
+
 public sealed record ExpoPushResult(string Status, string? TicketId = null, string? Error = null);
 
 public sealed class ExpoChatPushClient(HttpClient client, ChatPushOptions options)
@@ -37,6 +53,18 @@ public sealed class ExpoChatPushClient(HttpClient client, ChatPushOptions option
     public Task<ExpoPushResult> SendAsync(ExpoPushPayload payload, CancellationToken cancellationToken)
     {
         // 한 수신자씩 전송하여 Expo의 배열 한도와 응답 순서의 대응을 고정한다.
+        string body = "[" + SerializePayload(payload) + "]";
+        return RequestAsync(SendUri, body, null, cancellationToken);
+    }
+
+    public static string SerializePayload(ExpoOpenInvitationPushPayload payload)
+    {
+        return JsonSerializer.Serialize(payload, JsonOptions);
+    }
+
+    public Task<ExpoPushResult> SendAsync(ExpoOpenInvitationPushPayload payload, CancellationToken cancellationToken)
+    {
+        // 초대는 messageId를 위조하지 않는다. 기존 deadline/strict parser와 같은 전송 경로를 쓴다.
         string body = "[" + SerializePayload(payload) + "]";
         return RequestAsync(SendUri, body, null, cancellationToken);
     }

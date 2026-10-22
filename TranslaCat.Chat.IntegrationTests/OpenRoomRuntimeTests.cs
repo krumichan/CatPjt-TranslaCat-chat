@@ -155,7 +155,7 @@ public sealed class OpenRoomRuntimeTests(ChatMySqlFixture fixture)
         // 준비: 한 계정이 링크 공개 방과 탐색 공개 방을 만든다.
         long owner = UserId();
         long visitor = owner + 1;
-        await using var host = await HostAsync();
+        await using var host = await HostAsync(storage: new SyntheticStorage(fixture.Contexts));
         var unlisted = await CreateAsync(host, owner, "synthetic unlisted", "UNLISTED");
         var publicRoom = await CreateAsync(host, owner, "synthetic public", "PUBLIC");
         long unlistedId = unlisted.GetProperty("id").GetInt64();

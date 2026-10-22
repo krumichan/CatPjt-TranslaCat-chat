@@ -74,6 +74,9 @@ internal sealed class ChatNotificationConfiguration : IEntityTypeConfiguration<C
             .HasDatabaseName("uk_chat_notification_recipient_type_source")
             .IsUnique();
 
+        builder.HasIndex(entity => new { entity.ActorUserId, entity.SourceEventKey }, "idx_chat_notification_actor_source")
+            .HasDatabaseName("idx_chat_notification_actor_source");
+
         // CHAT 내부 관계만 FK로 연결한다. BE 사용자 식별자는 외부 참조 값이다.
         builder.HasOne<ChatRoomEntity>()
             .WithMany()

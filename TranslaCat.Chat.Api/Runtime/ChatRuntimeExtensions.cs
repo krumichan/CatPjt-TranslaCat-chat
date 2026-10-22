@@ -10,6 +10,7 @@ using TranslaCat.Chat.Api.Membership;
 using TranslaCat.Chat.Api.MembershipQuery;
 using TranslaCat.Chat.Api.Messaging;
 using TranslaCat.Chat.Api.Notifications;
+using TranslaCat.Chat.Api.OpenInvitations;
 using TranslaCat.Chat.Api.OpenMembership;
 using TranslaCat.Chat.Api.OpenModeration;
 using TranslaCat.Chat.Api.OpenRooms;
@@ -44,6 +45,7 @@ public static class ChatRuntimeExtensions
         services.AddChatMessageHttp();
         services.AddChatLanguageHttp();
         services.AddChatNotificationHttp();
+        services.AddOpenInvitationHttp();
         services.AddChatMembershipHttp();
         services.AddOpenRoomHttp();
         services.AddOpenMembershipHttp();
