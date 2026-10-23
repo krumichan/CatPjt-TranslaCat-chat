@@ -22,6 +22,13 @@ public interface IChatMembershipDirectory
 
 public interface IChatMembershipStore
 {
+    // 선택 정책이 꺼진 기존 구현/mock은 이전 transaction 계약을 유지한다.
+    bool UsesAccountFencing => false;
+    Task<IReadOnlyList<long>> ReadAccountsForFenceAsync(long roomId, CancellationToken token)
+        => Task.FromResult<IReadOnlyList<long>>([]);
+    Task<T> ExecuteForAccountsAsync<T>(IReadOnlyList<long> accounts,
+        Func<IChatMembershipSession, CancellationToken, Task<T>> work, CancellationToken token)
+        => ExecuteAsync(work, token);
     Task<T> ExecuteAsync<T>(Func<IChatMembershipSession, CancellationToken, Task<T>> work, CancellationToken cancellationToken);
 }
 

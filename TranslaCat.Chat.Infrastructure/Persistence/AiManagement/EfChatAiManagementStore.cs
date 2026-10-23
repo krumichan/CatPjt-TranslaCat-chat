@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -13,11 +15,11 @@ public sealed partial class EfChatAiManagementStore(
     IOpenMembershipDelivery events,
     ILogger<EfChatAiManagementStore> logger,
     IChatRoomAccountReader? accounts = null,
-    IChatAiProfileStorage? storage = null) : IChatAiManagementStore
+    IChatAiProfileStorage? storage = null, IChatContentPolicy? policy = null) : IChatAiManagementStore
 {
     public Task<ChatAiMemberList> ListAsync(long userId, long roomId, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(async (db, intents) =>
+        return ExecuteAsync(userId, async (db, intents) =>
         {
             await AccessAsync(db, userId, roomId, manage: true, write: false, token);
             var rows = await db.ChatRoomAiMembers.Where(row => row.ChatRoomId == roomId && row.Active && row.DeletedAt == null)
@@ -35,7 +37,7 @@ public sealed partial class EfChatAiManagementStore(
 
     public Task<ChatAiMember> GetAsync(long userId, long roomId, long memberId, bool safeProfile, CancellationToken token)
     {
-        return ExecuteAsync(async (db, intents) =>
+        return ExecuteAsync(userId, async (db, intents) =>
         {
             await AccessAsync(db, userId, roomId, manage: !safeProfile, write: false, token);
             var member = await MemberAsync(db, roomId, memberId, token);
@@ -50,7 +52,7 @@ public sealed partial class EfChatAiManagementStore(
 
     public Task<ChatAiMember> CreateAsync(long userId, long roomId, ChatAiProfileInput? profile, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(async (db, intents) =>
+        return ExecuteAsync(userId, async (db, intents) =>
         {
             if (profile is null)
             {
@@ -91,7 +93,7 @@ public sealed partial class EfChatAiManagementStore(
 
     public Task<ChatAiMember> UpdateAsync(long userId, long roomId, long memberId, ChatAiProfileInput? profile, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(async (db, intents) =>
+        return ExecuteAsync(userId, async (db, intents) =>
         {
             if (profile is null)
             {
@@ -112,7 +114,7 @@ public sealed partial class EfChatAiManagementStore(
 
     public Task<ChatAiMember> DeleteAsync(long userId, long roomId, long memberId, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(async (db, intents) =>
+        return ExecuteAsync(userId, async (db, intents) =>
         {
             await AccessAsync(db, userId, roomId, manage: true, write: true, token);
             var member = await MemberAsync(db, roomId, memberId, token);
@@ -135,10 +137,11 @@ public sealed partial class EfChatAiManagementStore(
         }, token);
     }
 
-    private async Task<T> ExecuteAsync<T>(Func<ChatDbContext, List<OpenMembershipIntent>, Task<T>> work, CancellationToken token)
+    private async Task<T> ExecuteAsync<T>(long userId, Func<ChatDbContext, List<OpenMembershipIntent>, Task<T>> work, CancellationToken token)
     {
         await using var db = await contexts.CreateDbContextAsync(token);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(db, [userId], token);
         var intents = new List<OpenMembershipIntent>();
         var result = await work(db, intents);
         await events.ValidateAvailabilityAsync(intents, token);

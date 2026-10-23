@@ -1,3 +1,4 @@
+using TranslaCat.Chat.Application.Safety;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -79,7 +80,7 @@ public static class ChatNotificationPreferenceHttpExtensions
     public static IServiceCollection AddChatNotificationPreferenceHttp(this IServiceCollection services)
     {
         services.TryAddScoped<IChatNotificationPreferenceStore>(provider => new EfChatNotificationPreferenceStore(
-            provider.GetService<IDbContextFactory<ChatDbContext>>() ?? throw new ChatNotificationPreferenceUnavailableException()));
+            provider.GetService<IDbContextFactory<ChatDbContext>>() ?? throw new ChatNotificationPreferenceUnavailableException(), provider.GetService<IChatContentPolicy>()));
         services.TryAddScoped<ChatNotificationPreferenceService>();
         return services;
     }

@@ -1,3 +1,4 @@
+using TranslaCat.Chat.Application.Safety;
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Api.Read;
 using TranslaCat.Chat.Api.Runtime;
@@ -35,7 +36,7 @@ public static class ChatTranslationExtensions
             .RedactLoggedHeaders(["X-API-KEY", "Authorization"]);
         services.AddScoped<IChatTranslationStore>(provider => new EfChatTranslationStore(
             provider.GetService<IDbContextFactory<ChatDbContext>>() ?? throw new ChatMessageDependencyUnavailableException("chat database"),
-            () => LocalNow(provider), provider.GetService<IChatMessageProfileReader>()));
+            () => LocalNow(provider), provider.GetService<IChatMessageProfileReader>(), provider.GetService<IChatContentPolicy>()));
         services.AddScoped<IChatTranslationEventDelivery>(provider => new ChatTranslationRealtimeDelivery(
             provider.GetService<ChatRealtimeRedisRelay>() ?? throw new ChatMessageDependencyUnavailableException("realtime relay"),
             provider.GetRequiredService<ChatTranslationContractMapper>(), provider.GetRequiredService<ChatReadLocalTime>(),

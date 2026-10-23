@@ -7,6 +7,8 @@ using TranslaCat.Chat.Application.OpenRooms;
 using TranslaCat.Chat.Application.Presence;
 using TranslaCat.Chat.Application.Rooms;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
+using TranslaCat.Chat.Application.Safety;
+using TranslaCat.Chat.Infrastructure.Safety;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence.OpenRooms;
 
@@ -16,7 +18,8 @@ public sealed partial class EfOpenRoomStore(
     IChatRoomAccountReader? accounts = null,
     IOpenProfileStorage? storage = null,
     IOpenProfileEventDelivery? events = null,
-    ChatPresenceCoordinator? presence = null) : IOpenRoomStore
+    ChatPresenceCoordinator? presence = null, IChatContentPolicy? contentPolicy = null,
+    IOpenProfileUploadJournal? imageJournal = null) : IOpenRoomStore
 {
     public async Task<OpenRoomDetail> CreateAsync(long userId, OpenRoomValidatedCreate request,
         DateTime now, CancellationToken cancellationToken)
@@ -28,6 +31,7 @@ public sealed partial class EfOpenRoomStore(
         // 방/OPEN 설정/OWNER membership/profile을 동일 transaction에서 생성한다.
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
+        if (contentPolicy is not null) await ChatAccountWriteGate.AcquireAsync(context, [userId], cancellationToken);
         var room = new ChatRoomEntity
         {
             RoomType = "OPEN",

@@ -10,6 +10,7 @@ using TranslaCat.Chat.Api.Messaging;
 using TranslaCat.Chat.Api.Read;
 using TranslaCat.Chat.Api.Read.Contracts;
 using TranslaCat.Chat.Application.Notifications;
+using TranslaCat.Chat.Application.Safety;
 using TranslaCat.Chat.Infrastructure.Persistence;
 using TranslaCat.Chat.Infrastructure.Persistence.Notifications;
 
@@ -209,7 +210,8 @@ public static class ChatNotificationHttpExtensions
     public static IServiceCollection AddChatNotificationHttp(this IServiceCollection services)
     {
         services.TryAddScoped<IChatNotificationStore>(provider => new EfChatNotificationStore(
-            provider.GetService<IDbContextFactory<ChatDbContext>>() ?? throw new ChatNotificationDependencyUnavailableException()));
+            provider.GetService<IDbContextFactory<ChatDbContext>>() ?? throw new ChatNotificationDependencyUnavailableException(),
+            provider.GetService<IChatContentPolicy>()));
         services.TryAddScoped(provider => new ChatNotificationService(provider.GetRequiredService<IChatNotificationStore>(),
             provider.GetService<IChatNotificationProfileReader>(),
             () => provider.GetRequiredService<ChatReadLocalTime>().FromUtc(provider.GetRequiredService<TimeProvider>().GetUtcNow())));
@@ -218,7 +220,7 @@ public static class ChatNotificationHttpExtensions
         services.TryAddScoped<IChatActivityNotificationWriter>(provider => new EfChatActivityNotificationWriter(
             provider.GetService<IDbContextFactory<ChatDbContext>>() ?? throw new ChatNotificationDependencyUnavailableException(),
             provider.GetService<IChatActivityNotificationDelivery>(),
-            () => provider.GetRequiredService<ChatReadLocalTime>().FromUtc(provider.GetRequiredService<TimeProvider>().GetUtcNow())));
+            () => provider.GetRequiredService<ChatReadLocalTime>().FromUtc(provider.GetRequiredService<TimeProvider>().GetUtcNow()), provider.GetService<IChatContentPolicy>()));
         return services;
     }
 }

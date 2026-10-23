@@ -20,7 +20,8 @@ public sealed record ChatMessageView(
     string? SenderName, string? SenderEmail, string? SenderProfileImageUrl,
     string SenderType, string MessageType, string Content, string Status,
     long? UnreadMemberCount, IReadOnlyList<ChatMessageTranslationView> Translations,
-    DateTime CreatedAt, DateTime UpdatedAt, OpenChatMessageSenderView? Sender);
+    DateTime CreatedAt, DateTime UpdatedAt, OpenChatMessageSenderView? Sender,
+    string ContentVisibility = "VISIBLE", bool AuthorDeleted = false);
 
 public sealed record ChatMessagePage(IReadOnlyList<ChatMessageView> Messages, long? NextCursorId, bool HasNext);
 

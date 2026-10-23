@@ -1,3 +1,4 @@
+using TranslaCat.Chat.Application.Safety;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -99,7 +100,7 @@ public static class OpenInvitationHttpExtensions
             {
                 var instant = provider.GetRequiredService<TimeProvider>().GetUtcNow();
                 return (provider.GetRequiredService<ChatReadLocalTime>().FromUtc(instant), instant.UtcDateTime);
-            }));
+            }, provider.GetService<IChatContentPolicy>()));
         services.TryAddScoped(provider => new OpenInvitationService(provider.GetRequiredService<IOpenInvitationStore>(),
             () => provider.GetRequiredService<ChatReadLocalTime>().FromUtc(provider.GetRequiredService<TimeProvider>().GetUtcNow())));
         services.TryAddSingleton(provider => new ChatReadTimestampFormatter(provider.GetRequiredService<ChatReadLocalTime>().SourceTimeZone));

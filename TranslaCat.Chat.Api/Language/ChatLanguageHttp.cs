@@ -1,3 +1,4 @@
+using TranslaCat.Chat.Application.Safety;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
@@ -213,7 +214,7 @@ public static class ChatLanguageHttpExtensions
         services.TryAddScoped<IChatLanguageStore>(provider => new EfChatLanguageStore(
             provider.GetService<IDbContextFactory<ChatDbContext>>() ?? throw new ChatLanguageDependencyUnavailableException(),
             provider.GetService<IChatMessageProfileReader>(),
-            () => provider.GetRequiredService<ChatReadLocalTime>().FromUtc(provider.GetRequiredService<TimeProvider>().GetUtcNow())));
+            () => provider.GetRequiredService<ChatReadLocalTime>().FromUtc(provider.GetRequiredService<TimeProvider>().GetUtcNow()), provider.GetService<IChatContentPolicy>()));
         services.TryAddScoped<ChatLanguageService>();
         services.TryAddScoped<ChatLegacyMemberLanguageService>();
         return services;

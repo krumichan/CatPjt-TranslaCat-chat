@@ -8,7 +8,8 @@ public sealed record ChatNotificationSummary(long UnreadChatMessageCount, long U
 }
 public sealed record ChatNotificationChatRow(long RoomId, string RoomType, string SourceType, string? RoomName,
     long LatestMessageId, long? LatestSenderUserId, string? AiSenderName, string? OpenSenderName,
-    string MessageType, string Content, DateTime CreatedAt, long? PartnerUserId, long UnreadCount, long FirstUnreadMessageId);
+    string MessageType, string Content, DateTime CreatedAt, long? PartnerUserId, long UnreadCount, long FirstUnreadMessageId,
+    bool LatestAuthorDeleted = false);
 public sealed record ChatNotificationLatestMessage(long Id, string? SenderDisplayName, string MessageType, string? ContentPreview, DateTime CreatedAt);
 public sealed record ChatNotificationChatItem(long RoomId, string RoomType, string SourceType, string? RoomDisplayName,
     string? RoomAvatarUrl, ChatNotificationLatestMessage LatestMessage, long UnreadCount, long FirstUnreadMessageId);
@@ -81,7 +82,7 @@ public sealed class ChatNotificationService(IChatNotificationStore store, IChatN
                 roomName = display.DisplayName;
                 avatar = display.AvatarUrl;
             }
-            var senderName = row.AiSenderName;
+            var senderName = row.LatestAuthorDeleted ? "탈퇴한 사용자" : row.AiSenderName;
             if (senderName is null && row.LatestSenderUserId is { } senderId)
             {
                 senderName = row.RoomType == "OPEN" ? row.OpenSenderName

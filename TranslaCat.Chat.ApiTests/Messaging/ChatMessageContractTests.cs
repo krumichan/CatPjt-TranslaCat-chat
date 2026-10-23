@@ -21,7 +21,9 @@ public sealed class ChatMessageContractTests
         var json = JsonSerializer.SerializeToElement(mapper.ToResponse(value));
 
         // 검증
-        Assert.Equal(16, json.EnumerateObject().Count());
+        Assert.Equal(18, json.EnumerateObject().Count());
+        Assert.Equal("VISIBLE", json.GetProperty("contentVisibility").GetString());
+        Assert.False(json.GetProperty("authorDeleted").GetBoolean());
         Assert.Equal(9007199254740993L, json.GetProperty("id").GetInt64());
         Assert.Equal(JsonValueKind.Null, json.GetProperty("senderAiMemberId").ValueKind);
         Assert.Equal(JsonValueKind.Null, json.GetProperty("unreadMemberCount").ValueKind);
@@ -32,6 +34,28 @@ public sealed class ChatMessageContractTests
         Assert.Equal("PENDING", translation.GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, translation.GetProperty("completedAt").ValueKind);
         Assert.Equal(JsonValueKind.Null, translation.GetProperty("translatedContent").ValueKind);
+    }
+
+    [Fact]
+    public void Explicit_masked_and_deleted_author_metadata_survive_wire_mapping()
+    {
+        // 준비: 원문/신원 제거 여부는 Application 정책이 결정하고 mapper는 그 표시를 보존한다.
+        var mapper = new ChatMessageContractMapper(TimeZoneInfo.Utc);
+        var masked = SyntheticMessageTransaction.View() with { Content = "차단한 사용자의 메시지입니다.", ContentVisibility = "BLOCKED",
+            SenderUserId = null, SenderName = null, SenderEmail = null, SenderProfileImageUrl = null, Sender = null, Translations = [] };
+        var deleted = masked with { Content = "보존한 합성 원문", ContentVisibility = "VISIBLE", AuthorDeleted = true, SenderName = "탈퇴한 사용자" };
+
+        // 실행
+        var blockedJson = JsonSerializer.SerializeToElement(mapper.ToResponse(masked));
+        var deletedJson = JsonSerializer.SerializeToElement(mapper.ToResponse(deleted));
+
+        // 검증
+        Assert.Equal("BLOCKED", blockedJson.GetProperty("contentVisibility").GetString());
+        Assert.Empty(blockedJson.GetProperty("translations").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, blockedJson.GetProperty("senderUserId").ValueKind);
+        Assert.True(deletedJson.GetProperty("authorDeleted").GetBoolean());
+        Assert.Equal("탈퇴한 사용자", deletedJson.GetProperty("senderName").GetString());
+        Assert.Equal("보존한 합성 원문", deletedJson.GetProperty("content").GetString());
     }
 
     [Fact]

@@ -4,6 +4,7 @@ import base64
 import copy
 import hashlib
 import ipaddress
+import json
 import os
 from pathlib import Path
 import re
@@ -15,7 +16,7 @@ from urllib.parse import urlparse
 
 HERE=Path(__file__).resolve().parents[1]
 SELECTED={'DeployError','need','one_line','origin','is_canonical_native_origin','native_origin',
-          'env_text','connection','write','materialize','mobile_push'}
+          'env_text','connection','write','materialize','mobile_push','chat_safety','parse_runtime_config'}
 
 
 def source_namespace():
@@ -25,7 +26,7 @@ def source_namespace():
     if {node.name for node in selected}!=SELECTED:
         raise AssertionError('required source function missing')
     values={'__name__':'portable_deployment_functions','Path':Path,'re':re,'ipaddress':ipaddress,
-            'urlparse':urlparse,'os':os}
+            'urlparse':urlparse,'os':os,'json':json}
     exec(compile(ast.Module(body=selected,type_ignores=[]),str(HERE/'deploy.py'),'exec'),values)
     return values
 

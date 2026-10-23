@@ -1470,6 +1470,304 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Migrations
                     b.ToTable("open_invitation_push_outbox", (string)null);
                 });
 
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Safety.ChatAccountDeletionEntity", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime?>("LocalCompletedAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("local_completed_at_utc");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("operation_id")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<DateTime>("RequestedAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("requested_at_utc");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("uk_chat_account_deletion_operation");
+
+                    b.ToTable("chat_account_deletion", (string)null);
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Safety.ChatAccountDeletionObjectEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime>("DueAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("due_at_utc");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("object_key");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompletedAtUtc", "DueAtUtc")
+                        .HasDatabaseName("idx_chat_deletion_object_due");
+
+                    b.HasIndex("UserId", "ObjectKey")
+                        .IsUnique()
+                        .HasDatabaseName("uk_chat_deletion_object");
+
+                    b.ToTable("chat_account_deletion_object", (string)null);
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Safety.ChatAccountWriteGateEntity", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("chat_account_write_gate", (string)null);
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Safety.ChatOpenProfileUploadIntentEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<long>("MemberId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("member_id");
+
+                    b.Property<DateTime?>("NextAttemptAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("object_key")
+                        .UseCollation("utf8mb4_bin");
+
+                    b.Property<DateTime?>("PutConfirmedAtUtc")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("put_confirmed_at_utc");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("state")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextAttemptAtUtc")
+                        .HasDatabaseName("idx_chat_open_profile_upload_due");
+
+                    b.HasIndex("UserId", "ObjectKey")
+                        .IsUnique()
+                        .HasDatabaseName("uk_chat_open_profile_upload_key");
+
+                    b.ToTable("chat_open_profile_upload_intent", (string)null);
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Safety.ChatReportEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ClientRequestId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("client_request_id")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Detail")
+                        .HasColumnType("text")
+                        .HasColumnName("detail");
+
+                    b.Property<string>("EvidenceContent")
+                        .HasColumnType("text")
+                        .HasColumnName("evidence_content");
+
+                    b.Property<DateTime>("EvidenceExpiresAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("evidence_expires_at");
+
+                    b.Property<DateTime?>("EvidencePurgedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("evidence_purged_at");
+
+                    b.Property<string>("EvidenceSenderDisplay")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("evidence_sender_display");
+
+                    b.Property<long?>("MessageId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("message_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("reason");
+
+                    b.Property<long?>("ReporterUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reporter_user_id");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("request_fingerprint")
+                        .UseCollation("ascii_bin");
+
+                    b.Property<string>("ReviewNote")
+                        .HasColumnType("text")
+                        .HasColumnName("review_note");
+
+                    b.Property<long>("RoomId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("room_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("status");
+
+                    b.Property<long?>("TargetMemberId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("target_member_id");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("target_type");
+
+                    b.Property<long?>("TargetUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("target_user_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvidencePurgedAt", "EvidenceExpiresAt")
+                        .HasDatabaseName("idx_chat_report_evidence_due");
+
+                    b.HasIndex("ReporterUserId", "ClientRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("uk_chat_report_request");
+
+                    b.HasIndex("Status", "Id")
+                        .HasDatabaseName("idx_chat_report_status_id");
+
+                    b.ToTable("chat_report", (string)null);
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Safety.ChatReportReviewEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<string>("PreviousStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("previous_status");
+
+                    b.Property<long>("ReportId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("report_id");
+
+                    b.Property<long?>("ReviewerUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reviewer_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReportId", "Id")
+                        .HasDatabaseName("idx_chat_report_review_history");
+
+                    b.ToTable("chat_report_review", (string)null);
+                });
+
             modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Persistence.Entities.ChatMessageEntity", b =>
                 {
                     b.HasOne("TranslaCat.Chat.Infrastructure.Persistence.Entities.ChatRoomEntity", null)
@@ -1619,6 +1917,15 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Migrations
                     b.HasOne("TranslaCat.Chat.Infrastructure.Persistence.Entities.ChatNotificationEntity", null)
                         .WithMany()
                         .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TranslaCat.Chat.Infrastructure.Safety.ChatReportReviewEntity", b =>
+                {
+                    b.HasOne("TranslaCat.Chat.Infrastructure.Safety.ChatReportEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ReportId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

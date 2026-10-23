@@ -22,7 +22,9 @@ public sealed record ChatMessageResponseDto(
     [property: JsonPropertyName("translations")] IReadOnlyList<ChatMessageTranslationResponseDto> Translations,
     [property: JsonPropertyName("createdAt")] string CreatedAt,
     [property: JsonPropertyName("updatedAt")] string UpdatedAt,
-    [property: JsonPropertyName("sender")] OpenChatMessageSenderResponseDto? Sender);
+    [property: JsonPropertyName("sender")] OpenChatMessageSenderResponseDto? Sender,
+    [property: JsonPropertyName("contentVisibility")] string ContentVisibility = "VISIBLE",
+    [property: JsonPropertyName("authorDeleted")] bool AuthorDeleted = false);
 
 public sealed record ChatMessageTranslationResponseDto(
     [property: JsonPropertyName("id")] long Id,
@@ -73,7 +75,8 @@ public sealed class ChatMessageContractMapper(TimeZoneInfo sourceTimeZone)
                 item.CompletedAt is { } completed ? timestamp.Format(completed) : null)).ToArray(),
             timestamp.Format(value.CreatedAt), timestamp.Format(value.UpdatedAt),
             value.Sender is { } sender ? new OpenChatMessageSenderResponseDto(
-                sender.OpenChatMemberId, sender.MemberCode, sender.Nickname, sender.ProfileImageUrl, sender.Role) : null);
+                sender.OpenChatMemberId, sender.MemberCode, sender.Nickname, sender.ProfileImageUrl, sender.Role) : null,
+            value.ContentVisibility, value.AuthorDeleted);
     }
 
     public ChatMessagePageResponseDto ToResponse(ChatMessagePage value)

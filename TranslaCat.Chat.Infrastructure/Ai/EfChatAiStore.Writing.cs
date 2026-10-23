@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TranslaCat.Chat.Application.Ai;
@@ -21,10 +23,27 @@ public sealed partial class EfChatAiStore
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
             long roomId = plan.Request.Room.RoomId;
+            if (contentPolicy is not null && plan.Request.TriggerMessage is { } source)
+            {
+                long? account = await db.ChatMessages.AsNoTracking().Where(row => row.Id == source.MessageId && row.ChatRoomId == roomId)
+                    .Select(row => row.SenderUserId).SingleOrDefaultAsync(cancellationToken);
+                if (account is null) return ChatAiProcessingResult.Skipped;
+                try { await ChatAccountWriteGate.AcquireAsync(db, [account.Value], cancellationToken); }
+                catch (ChatSafetyException error) when (error.Code == "CHAT_ACCOUNT_DELETED") { return ChatAiProcessingResult.Skipped; }
+            }
             var room = await LockRoomAsync(db, roomId, cancellationToken);
             if (room is null || !room.Active || room.DeletedAt is not null)
             {
                 return ChatAiProcessingResult.Failed;
+            }
+
+            // 모델 호출 도중 탈퇴한 발신자의 늦은 답변은 새 공유 메시지로 저장하지 않는다.
+            if (contentPolicy is not null && plan.Request.TriggerMessage is { } trigger)
+            {
+                var senderId = await db.ChatMessages.Where(row => row.Id == trigger.MessageId && row.ChatRoomId == roomId)
+                    .Select(row => row.SenderUserId).SingleOrDefaultAsync(cancellationToken);
+                if (senderId is null || await db.ChatAccountDeletions.AnyAsync(row => row.UserId == senderId, cancellationToken))
+                    return ChatAiProcessingResult.Skipped;
             }
 
             if (await db.ChatMessages.AnyAsync(row => row.AiRequestId == plan.Request.RequestId, cancellationToken))

@@ -21,7 +21,7 @@ public sealed class ChatMembershipService(IChatMembershipStore store, IChatMembe
         }
         var actor = await RequireFriendGroupUserAsync(userId, cancellationToken);
 
-        return await store.ExecuteAsync(async (session, token) =>
+        return await store.ExecuteForAccountsAsync([userId, friendUserId], async (session, token) =>
         {
             var existing = await session.FindFriendDirectAsync(userId, friendUserId, token);
             if (existing is not null)
@@ -39,9 +39,10 @@ public sealed class ChatMembershipService(IChatMembershipStore store, IChatMembe
         }, cancellationToken);
     }
 
-    public Task<ChatInvitationResult> InviteAsync(long userId, long roomId, ChatMembershipTargets targets, CancellationToken cancellationToken = default)
+    public async Task<ChatInvitationResult> InviteAsync(long userId, long roomId, ChatMembershipTargets targets, CancellationToken cancellationToken = default)
     {
-        return store.ExecuteAsync(async (session, token) =>
+        var accounts = await FenceAccountsAsync(userId, roomId, targets, cancellationToken);
+        return await store.ExecuteForAccountsAsync(accounts, async (session, token) =>
             {
                 // 원본 순서대로 방 lock/type를 확인한 다음 멤버 권한과 대상 사용자를 검증한다.
                 var room = await session.LockRoomAsync(roomId, token);
@@ -81,9 +82,10 @@ public sealed class ChatMembershipService(IChatMembershipStore store, IChatMembe
             }, cancellationToken);
     }
 
-    public Task<ChatInvitationResult> ConvertAsync(long userId, long roomId, ChatGroupConversionRequest request, CancellationToken cancellationToken = default)
+    public async Task<ChatInvitationResult> ConvertAsync(long userId, long roomId, ChatGroupConversionRequest request, CancellationToken cancellationToken = default)
     {
-        return store.ExecuteAsync(async (session, token) =>
+        var accounts = await FenceAccountsAsync(userId, roomId, request.Targets, cancellationToken);
+        return await store.ExecuteForAccountsAsync(accounts, async (session, token) =>
             {
                 var direct = await session.LockRoomAsync(roomId, token);
                 if (direct.RoomType != "DIRECT" || direct.SourceType != "FRIEND")
@@ -163,7 +165,7 @@ public sealed class ChatMembershipService(IChatMembershipStore store, IChatMembe
             users.Add(await RequireFriendGroupUserAsync(id!.Value, cancellationToken));
         }
 
-        return await store.ExecuteAsync(async (session, token) =>
+        return await store.ExecuteForAccountsAsync(new[] { userId }.Concat(users.Select(user => user.Id)).ToArray(), async (session, token) =>
         {
             // 친구 GROUP 생성은 원본대로 이름/설명을 trim하지 않고, 초대 notification/SYSTEM을 새로 추가하지 않는다.
             var now = clock();
@@ -172,6 +174,20 @@ public sealed class ChatMembershipService(IChatMembershipStore store, IChatMembe
             await AddMembersAsync(session, group, actor, users, null, now, token);
             return group.Id;
         }, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<long>> FenceAccountsAsync(long userId, long roomId, ChatMembershipTargets targets, CancellationToken token)
+    {
+        if (!store.UsesAccountFencing) return [userId];
+        // 사전 조회는 잠글 ID 집합만 만든다. 실제 방 권한/대상 검증은 기존 transaction 안에서 다시 한다.
+        var ids = new HashSet<long>(await store.ReadAccountsForFenceAsync(roomId, token)) { userId };
+        foreach (var id in targets.TargetUserIds ?? []) if (id is > 0) ids.Add(id.Value);
+        foreach (var value in targets.TargetPublicIds ?? [])
+        {
+            var publicId = NullableText(value);
+            if (publicId is not null && await Directory().FindByPublicIdAsync(publicId, token) is { } target) ids.Add(target.Id);
+        }
+        return ids.Order().ToArray();
     }
 
     private async Task<IReadOnlyList<ChatMembershipUser>> ResolveTargetsAsync(long userId, ChatMembershipTargets targets, string emptyCode, CancellationToken token)

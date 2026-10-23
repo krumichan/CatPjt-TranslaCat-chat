@@ -6,6 +6,7 @@ using TranslaCat.Chat.Application.Messaging;
 using TranslaCat.Chat.Infrastructure.Persistence;
 using TranslaCat.Chat.Infrastructure.Persistence.AiManagement;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
+using TranslaCat.Chat.Application.Safety;
 
 namespace TranslaCat.Chat.Infrastructure.Ai;
 
@@ -17,7 +18,7 @@ public sealed partial class EfChatAiStore(
     Func<int, int> nextRandom,
     ILogger<EfChatAiStore> logger,
     IChatAiUserNameReader? names = null,
-    IChatMessageProfileReader? profiles = null) : IChatAiStore
+    IChatMessageProfileReader? profiles = null, IChatContentPolicy? contentPolicy = null) : IChatAiStore
 {
     public async Task<IReadOnlyList<ChatAiPlan>> PlanAsync(long triggerMessageId, CancellationToken cancellationToken)
     {
@@ -28,6 +29,7 @@ public sealed partial class EfChatAiStore(
         {
             return [];
         }
+        if (contentPolicy is not null) await contentPolicy.RequireActiveAsync(trigger.SenderUserId.Value, cancellationToken);
 
         // 잠금 전 조회로 REPEATABLE READ snapshot을 고정하지 않는다. 잠금 대기 중 변경된 권한/설정을 읽는다.
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -184,6 +186,8 @@ public sealed partial class EfChatAiStore(
             users.Add(senderId);
         }
         var uniqueUsers = users.Distinct().ToArray();
+        var deletedUsers = contentPolicy is null ? [] : await db.ChatAccountDeletions.Where(row => uniqueUsers.Contains(row.UserId))
+            .Select(row => row.UserId).ToListAsync(cancellationToken);
         var aliases = uniqueUsers.Select((id, index) => (id, alias: "member-" + (index + 1))).ToDictionary(value => value.id, value => value.alias);
         var resolvedNames = new Dictionary<long, string>();
         var openNames = room.RoomType == "OPEN"
@@ -198,6 +202,7 @@ public sealed partial class EfChatAiStore(
             : [];
         foreach (long userId in uniqueUsers)
         {
+            if (deletedUsers.Contains(userId)) { resolvedNames[userId] = "탈퇴한 사용자"; continue; }
             string? nickname = openNames.GetValueOrDefault(userId);
             if (ChatMessageText.IsBlank(nickname))
             {

@@ -162,6 +162,9 @@ public sealed class HttpChatCoreDirectory(HttpChatCoreClient client) : IChatMess
             throw new ChatCoreUnavailableException();
         }
 
+        // BE 탈퇴 tombstone은 기존 공유 대화의 표시용일 뿐 신규 초대/친구/멤버 대상으로 채택하지 않는다.
+        if (account.PublicId == "DELETED" && account.Email == "deleted@deleted.invalid") return null;
+
         return account;
     }
 

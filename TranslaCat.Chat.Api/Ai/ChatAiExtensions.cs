@@ -4,6 +4,7 @@ using TranslaCat.Chat.Api.Read;
 using TranslaCat.Chat.Api.Runtime;
 using TranslaCat.Chat.Application.Ai;
 using TranslaCat.Chat.Application.Messaging;
+using TranslaCat.Chat.Application.Safety;
 using TranslaCat.Chat.Infrastructure.Ai;
 using TranslaCat.Chat.Infrastructure.Persistence;
 using TranslaCat.Chat.Infrastructure.Translation;
@@ -42,7 +43,7 @@ public static class ChatAiExtensions
             options, provider.GetRequiredService<IChatMessageEventDelivery>(),
             () => provider.GetRequiredService<ChatReadLocalTime>().FromUtc(provider.GetRequiredService<TimeProvider>().GetUtcNow()),
             Random.Shared.Next, provider.GetRequiredService<ILogger<EfChatAiStore>>(),
-            provider.GetService<IChatAiUserNameReader>(), provider.GetService<IChatMessageProfileReader>()));
+            provider.GetService<IChatAiUserNameReader>(), provider.GetService<IChatMessageProfileReader>(), provider.GetService<IChatContentPolicy>()));
         services.AddScoped(provider => new ChatAiProcessor(provider.GetRequiredService<IChatAiStore>(),
             provider.GetRequiredService<IChatAiReplyClient>(), provider.GetRequiredService<IChatAiDelay>(), Random.Shared.NextDouble,
             (stage, failure) => provider.GetRequiredService<ILogger<ChatAiProcessor>>()

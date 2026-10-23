@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Infrastructure.Push;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
 using TranslaCat.Chat.Infrastructure.Persistence.OpenInvitations;
+using TranslaCat.Chat.Infrastructure.Safety;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence;
 
@@ -28,6 +29,14 @@ public sealed class ChatDbContext(DbContextOptions<ChatDbContext> options) : DbC
     public DbSet<OpenInvitationPushOutboxEntity> OpenInvitationPushOutbox => Set<OpenInvitationPushOutboxEntity>();
     public DbSet<OpenInvitationPushDeliveryEntity> OpenInvitationPushDeliveries => Set<OpenInvitationPushDeliveryEntity>();
     public DbSet<OpenInvitationSenderGateEntity> OpenInvitationSenderGates => Set<OpenInvitationSenderGateEntity>();
+    public DbSet<ChatAccountDeletionEntity> ChatAccountDeletions => Set<ChatAccountDeletionEntity>();
+    public DbSet<ChatAccountDeletionObjectEntity> ChatAccountDeletionObjects => Set<ChatAccountDeletionObjectEntity>();
+    public DbSet<ChatReportEntity> ChatReports => Set<ChatReportEntity>();
+    public DbSet<ChatReportReviewEntity> ChatReportReviews => Set<ChatReportReviewEntity>();
+    public DbSet<ChatAccountWriteGateEntity> ChatAccountWriteGates => Set<ChatAccountWriteGateEntity>();
+    public DbSet<ChatOpenProfileUploadIntentEntity> ChatOpenProfileUploadIntents => Set<ChatOpenProfileUploadIntentEntity>();
+    internal HashSet<long> LockedSafetyAccounts { get; } = [];
+    internal Guid? SafetyGateTransactionId { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -8,6 +8,7 @@ using TranslaCat.Chat.Api.Runtime;
 using TranslaCat.Chat.Application.OpenRooms;
 using TranslaCat.Chat.Application.Presence;
 using TranslaCat.Chat.Application.Rooms;
+using TranslaCat.Chat.Application.Safety;
 using TranslaCat.Chat.Infrastructure.Persistence;
 using TranslaCat.Chat.Infrastructure.Persistence.OpenRooms;
 
@@ -30,7 +31,8 @@ public static class OpenRoomExtensions
         services.TryAddScoped(provider => new EfOpenRoomStore(provider.GetRequiredService<IDbContextFactory<ChatDbContext>>(),
             provider.GetRequiredService<ILogger<EfOpenRoomStore>>(), provider.GetService<IChatRoomAccountReader>(),
             provider.GetService<IOpenProfileStorage>(), provider.GetService<IOpenProfileEventDelivery>(),
-            provider.GetService<ChatPresenceCoordinator>()));
+            provider.GetService<ChatPresenceCoordinator>(), provider.GetService<IChatContentPolicy>(),
+            provider.GetService<IOpenProfileUploadJournal>()));
         services.TryAddScoped<IOpenRoomStore>(provider => provider.GetRequiredService<EfOpenRoomStore>());
         return services;
     }

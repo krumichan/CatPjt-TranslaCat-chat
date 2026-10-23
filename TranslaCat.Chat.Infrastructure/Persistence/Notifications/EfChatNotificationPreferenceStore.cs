@@ -1,10 +1,12 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.NotificationPreferences;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence.Notifications;
 
-public sealed class EfChatNotificationPreferenceStore(IDbContextFactory<ChatDbContext> contexts) : IChatNotificationPreferenceStore
+public sealed class EfChatNotificationPreferenceStore(IDbContextFactory<ChatDbContext> contexts, IChatContentPolicy? policy = null) : IChatNotificationPreferenceStore
 {
     public async Task<ChatNotificationPreference> GetAsync(long userId, CancellationToken token)
     {
@@ -18,6 +20,9 @@ public sealed class EfChatNotificationPreferenceStore(IDbContextFactory<ChatDbCo
     {
         await using var db = await contexts.CreateDbContextAsync(token);
 
+        await using var transaction = policy is null ? null : await db.Database.BeginTransactionAsync(token);
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(db, [userId], token);
+
         // 한 SQL의 행 잠금으로 동시 PUT을 직렬화한다. 같은 값 재전송은 cutoff를 변경하지 않는다.
         // 다시 켠 시점 이전의 대기 알림은 보내지 않지만 안읽음 데이터는 그대로 남긴다.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -28,6 +33,7 @@ public sealed class EfChatNotificationPreferenceStore(IDbContextFactory<ChatDbCo
                     THEN UTC_TIMESTAMP(6) ELSE enabled_since_utc END,
                 push_enabled = {pushEnabled}
             """, token);
+        if (transaction is not null) await transaction.CommitAsync(token);
         return new(pushEnabled);
     }
 
@@ -42,6 +48,7 @@ public sealed class EfChatNotificationPreferenceStore(IDbContextFactory<ChatDbCo
     {
         await using var db = await contexts.CreateDbContextAsync(token);
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(db, [userId], token);
 
         // 방 lifecycle과 같은 방→멤버 순서로 잠근다. 탈퇴·강퇴 뒤의 요청이 설정을 바꾸지 못하게 한다.
         var room = await db.ChatRooms.FromSqlInterpolated($"SELECT * FROM chat_room WHERE id = {roomId} FOR UPDATE")

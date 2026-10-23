@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.Read;
 using TranslaCat.Chat.Application.Realtime;
+using TranslaCat.Chat.Application.Safety;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence.Repositories;
 
-public sealed class EfChatRealtimeAccess(IDbContextFactory<ChatDbContext> contexts) : IChatRealtimeAccess
+public sealed class EfChatRealtimeAccess(IDbContextFactory<ChatDbContext> contexts, IChatContentPolicy? contentPolicy = null) : IChatRealtimeAccess
 {
     public Task ValidateRoomAccessAsync(long userId, long roomId, CancellationToken cancellationToken)
     {
@@ -18,6 +19,7 @@ public sealed class EfChatRealtimeAccess(IDbContextFactory<ChatDbContext> contex
 
     private async Task ValidateAsync(long userId, long roomId, bool closureOnly, CancellationToken cancellationToken)
     {
+        if (contentPolicy is not null) await contentPolicy.RequireActiveAsync(userId, cancellationToken);
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         var open = await context.OpenChatRooms.AsNoTracking()
             .SingleOrDefaultAsync(room => room.ChatRoomId == roomId, cancellationToken);

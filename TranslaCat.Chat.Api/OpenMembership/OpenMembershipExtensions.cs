@@ -1,3 +1,4 @@
+using TranslaCat.Chat.Application.Safety;
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Api.Read;
 using TranslaCat.Chat.Application.OpenMembership;
@@ -25,7 +26,7 @@ public static class OpenMembershipExtensions
         services.AddScoped<IOpenMembershipStore>(provider => new EfOpenMembershipStore(
             provider.GetRequiredService<IDbContextFactory<ChatDbContext>>(), provider.GetRequiredService<EfOpenRoomStore>(),
             provider.GetRequiredService<IOpenMembershipDelivery>(), provider.GetRequiredService<ILogger<EfOpenMembershipStore>>(),
-            provider.GetService<IChatRoomAccountReader>(), provider.GetService<IOpenProfileStorage>()));
+            provider.GetService<IChatRoomAccountReader>(), provider.GetService<IOpenProfileStorage>(), provider.GetService<IChatContentPolicy>()));
         return services;
     }
 }

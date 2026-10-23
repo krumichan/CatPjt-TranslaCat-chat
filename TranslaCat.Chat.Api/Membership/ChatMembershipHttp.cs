@@ -1,3 +1,4 @@
+using TranslaCat.Chat.Application.Safety;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
@@ -224,7 +225,7 @@ public static class ChatMembershipHttpExtensions
         services.TryAddScoped<IChatMembershipEventDelivery, ChatMembershipRealtimeDelivery>();
         services.TryAddScoped<IChatMembershipStore>(provider => new EfChatMembershipStore(
             provider.GetService<IDbContextFactory<ChatDbContext>>() ?? throw new ChatMembershipDependencyUnavailableException(),
-            provider.GetService<IChatMembershipEventDelivery>(), provider.GetRequiredService<ILogger<EfChatMembershipStore>>()));
+            provider.GetService<IChatMembershipEventDelivery>(), provider.GetRequiredService<ILogger<EfChatMembershipStore>>(), provider.GetService<IChatContentPolicy>()));
         services.TryAddScoped(provider => new ChatMembershipService(provider.GetRequiredService<IChatMembershipStore>(),
             provider.GetService<IChatMembershipDirectory>(),
             () => provider.GetRequiredService<ChatReadLocalTime>().FromUtc(provider.GetRequiredService<TimeProvider>().GetUtcNow())));

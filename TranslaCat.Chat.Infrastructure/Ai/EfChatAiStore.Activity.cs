@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.Ai;
 using TranslaCat.Chat.Application.Messaging;
@@ -12,6 +14,14 @@ public sealed partial class EfChatAiStore
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        if (contentPolicy is not null)
+        {
+            long? account = await db.ChatMessages.AsNoTracking().Where(row => row.Id == intent.MessageId && row.ChatRoomId == intent.ChatRoomId)
+                .Select(row => row.SenderUserId).SingleOrDefaultAsync(cancellationToken);
+            if (account is null) return;
+            try { await ChatAccountWriteGate.AcquireAsync(db, [account.Value], cancellationToken); }
+            catch (ChatSafetyException error) when (error.Code == "CHAT_ACCOUNT_DELETED") { return; }
+        }
         var room = await LockRoomAsync(db, intent.ChatRoomId, cancellationToken);
         if (room is null || !room.Active || room.DeletedAt is not null || room.RoomType is not ("GROUP" or "OPEN"))
         {

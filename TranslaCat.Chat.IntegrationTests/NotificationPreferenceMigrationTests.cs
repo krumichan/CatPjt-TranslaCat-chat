@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using MySql.Data.MySqlClient;
 using TranslaCat.Chat.Infrastructure.Persistence;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
+using TranslaCat.Chat.Api.Safety;
 
 namespace TranslaCat.Chat.IntegrationTests;
 
@@ -46,14 +47,16 @@ public sealed class NotificationPreferenceMigrationTests(ChatMySqlFixture fixtur
         db.ChatNotifications.Add(notification);
         await db.SaveChangesAsync();
         var before = (await db.Database.GetAppliedMigrationsAsync()).ToArray();
+        await Assert.ThrowsAnyAsync<Exception>(() => ChatAccountDeletionSchema.ValidateAsync(db, default));
 
         // 실행: 이전 릴리스에 존재하던 행을 가진 상태에서 additive upgrade하고 재적용한다.
         await db.Database.MigrateAsync();
         var after = (await db.Database.GetAppliedMigrationsAsync()).ToArray();
         await db.Database.MigrateAsync();
 
-        // 검증: 기존 수신 정책·읽음 데이터는 그대로이며 history가 정확히 한 번만 늘어난다.
-        Assert.Equal(before.Length + 1, after.Length);
+        // 검증: 기존 알림 migration 뒤 안전 정책/계정 gate 2개도 한 번씩만 추가된다.
+        Assert.Equal(before.Length + 4, after.Length);
+        Assert.Equal(new[] { "20261022071017_ChatNotificationPreferences", "20261022160852_ChatSafetyAndAccountDeletion", "20261022164144_ChatAccountWriteFence", "20261023014452_ChatOpenProfileUploadIntents" }, after.Skip(before.Length));
         Assert.Equal(after, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
@@ -67,5 +70,21 @@ public sealed class NotificationPreferenceMigrationTests(ChatMySqlFixture fixtur
         Assert.False(activity.IsRead);
         Assert.Null(activity.ReadAt);
         Assert.False(await db.ChatNotificationPreferences.AnyAsync());
+        Assert.False(await db.ChatAccountDeletions.AnyAsync());
+        Assert.False(await db.ChatAccountWriteGates.AnyAsync());
+        Assert.False(await db.ChatOpenProfileUploadIntents.AnyAsync());
+        await ChatAccountDeletionSchema.ValidateAsync(db, default);
+
+        // 테이블이 있어도 컬럼 하나가 빠지면 ready가 될 수 없다. 이 실행에서 만든 합성 catalog만 변경한다.
+        await db.Database.ExecuteSqlRawAsync("ALTER TABLE chat_open_profile_upload_intent RENAME COLUMN attempts TO synthetic_missing_attempts");
+        try
+        {
+            await Assert.ThrowsAnyAsync<Exception>(() => ChatAccountDeletionSchema.ValidateAsync(db, default));
+        }
+        finally
+        {
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE chat_open_profile_upload_intent RENAME COLUMN synthetic_missing_attempts TO attempts");
+        }
+        await ChatAccountDeletionSchema.ValidateAsync(db, default);
     }
 }

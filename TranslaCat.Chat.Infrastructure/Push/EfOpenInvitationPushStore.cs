@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.Core;
 using TranslaCat.Chat.Infrastructure.Persistence;
+using TranslaCat.Chat.Application.Safety;
 
 namespace TranslaCat.Chat.Infrastructure.Push;
 
-public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> contexts, ChatPushOptions options) : IOpenInvitationPushStore
+public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> contexts, ChatPushOptions options,
+    IChatContentPolicy? contentPolicy = null) : IOpenInvitationPushStore
 {
     public async Task<IReadOnlyList<long>> CandidatesAsync(bool deliveries, CancellationToken token)
     {
@@ -85,6 +87,8 @@ public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> c
         await using var db = await contexts.CreateDbContextAsync(token);
 
         // 초대 수신함은 보존하고 전역 push 정책만 적용한다. 비참여자 초대에 방별 mute를 적용하지 않는다.
+        if (contentPolicy is not null && await db.ChatAccountDeletions.AnyAsync(row => row.UserId == job.SenderUserId
+            || row.UserId == job.RecipientUserId, token)) return false;
         if (await db.ChatNotificationPreferences.AnyAsync(row => row.UserId == job.RecipientUserId
             && (!row.PushEnabled || (row.EnabledSinceUtc != null && row.EnabledSinceUtc > job.CreatedAtUtc)), token)) return false;
 

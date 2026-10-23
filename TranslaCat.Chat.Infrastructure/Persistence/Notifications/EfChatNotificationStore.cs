@@ -1,15 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.Notifications;
+using TranslaCat.Chat.Application.Safety;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence.Notifications;
 
-public sealed class EfChatNotificationStore(IDbContextFactory<ChatDbContext> contexts) : IChatNotificationStore
+public sealed class EfChatNotificationStore(IDbContextFactory<ChatDbContext> contexts, IChatContentPolicy? contentPolicy = null) : IChatNotificationStore
 {
     public async Task<ChatNotificationSummary> GetSummaryAsync(long userId, CancellationToken cancellationToken)
     {
+        long[] blocked = contentPolicy is null ? [] : (await contentPolicy.BlockedSendersAsync(userId, cancellationToken)).ToArray();
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, cancellationToken);
-        var unread = VisibleMessages(context, userId).Where(row => row.Unread);
+        var unread = VisibleMessages(context, userId, blocked).Where(row => row.Unread);
         var messages = await unread.LongCountAsync(cancellationToken);
         var rooms = await unread.Select(row => row.RoomId).Distinct().LongCountAsync(cancellationToken);
         var activities = await context.ChatNotifications.LongCountAsync(row => row.RecipientUserId == userId
@@ -54,10 +56,11 @@ public sealed class EfChatNotificationStore(IDbContextFactory<ChatDbContext> con
 
     public async Task<IReadOnlyList<ChatNotificationChatRow>> GetUnreadChatsAsync(long userId, long? cursorMessageId, int limit, CancellationToken cancellationToken)
     {
+        long[] blocked = contentPolicy is null ? [] : (await contentPolicy.BlockedSendersAsync(userId, cancellationToken)).ToArray();
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, cancellationToken);
         // latest는 자기 메시지도 포함한다. unread만 먼저 필터링하면 알림 정렬과 preview가 달라진다.
-        var grouped = VisibleMessages(context, userId).GroupBy(row => new { row.RoomId, row.RoomType, row.SourceType, row.RoomName })
+        var grouped = VisibleMessages(context, userId, blocked).GroupBy(row => new { row.RoomId, row.RoomType, row.SourceType, row.RoomName })
             .Select(group => new
             {
                 group.Key.RoomId,
@@ -96,13 +99,16 @@ public sealed class EfChatNotificationStore(IDbContextFactory<ChatDbContext> con
                                   where member.ChatRoomId == row.RoomId && member.UserId == senderId
                                   select profile.Nickname).FirstOrDefaultAsync(cancellationToken);
             }
-            result.Add(new(row.RoomId, row.RoomType, row.SourceType, row.RoomName, message.Id, message.SenderUserId,
-                aiName, openName, message.MessageType, message.Content, message.CreatedAt, partnerId, row.UnreadCount, row.FirstUnreadId));
+            bool authorDeleted = contentPolicy is not null && message.SenderUserId is { } authorId
+                && await context.ChatAccountDeletions.AnyAsync(gone => gone.UserId == authorId, cancellationToken);
+            if (authorDeleted) openName = "탈퇴한 사용자";
+            result.Add(new(row.RoomId, row.RoomType, row.SourceType, row.RoomName, message.Id, authorDeleted ? null : message.SenderUserId,
+                aiName, openName, message.MessageType, message.Content, message.CreatedAt, partnerId, row.UnreadCount, row.FirstUnreadId, authorDeleted));
         }
         return result;
     }
 
-    private static IQueryable<VisibleMessage> VisibleMessages(ChatDbContext context, long userId)
+    private static IQueryable<VisibleMessage> VisibleMessages(ChatDbContext context, long userId, long[] blocked)
     {
         return from member in context.ChatRoomMembers
                join room in context.ChatRooms on member.ChatRoomId equals room.Id
@@ -112,6 +118,7 @@ public sealed class EfChatNotificationStore(IDbContextFactory<ChatDbContext> con
                    && (room.RoomType != "OPEN" || context.OpenChatRooms.Any(open => open.ChatRoomId == room.Id && open.Status == "ACTIVE"))
                    && message.Status == "SENT" && message.DeletedAt == null && message.MessageType != "SYSTEM"
                    && message.CreatedAt >= member.JoinedAt
+                   && (message.SenderType != "USER" || message.SenderUserId == null || !blocked.Contains(message.SenderUserId.Value))
                select new VisibleMessage
                {
                    RoomId = room.Id,

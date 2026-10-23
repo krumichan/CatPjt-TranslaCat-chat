@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Application.Safety;
+using TranslaCat.Chat.Infrastructure.Safety;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.Messaging;
@@ -9,7 +11,7 @@ namespace TranslaCat.Chat.Infrastructure.Translation;
 public sealed class EfChatTranslationStore(
     IDbContextFactory<ChatDbContext> contexts,
     Func<DateTime> readClock,
-    IChatMessageProfileReader? profiles = null) : IChatTranslationStore
+    IChatMessageProfileReader? profiles = null, IChatContentPolicy? policy = null) : IChatTranslationStore
 {
     public async Task<IReadOnlyList<long>> FindCandidatesAsync(
         string status, int limit, CancellationToken cancellationToken)
@@ -107,11 +109,16 @@ public sealed class EfChatTranslationStore(
         await using var transaction = await context.Database.BeginTransactionAsync(
             IsolationLevel.RepeatableRead, cancellationToken);
 
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context, [userId], cancellationToken);
+
         // 동일/완료 상태여도 원본처럼 OPEN 접근, membership, 대상 메시지 검증을 먼저 수행한다.
         await ValidateAccessAsync(context, userId, roomId, cancellationToken);
         var message = await context.ChatMessages.AsNoTracking().SingleOrDefaultAsync(
             row => row.Id == messageId && row.ChatRoomId == roomId && row.DeletedAt == null,
             cancellationToken) ?? throw new ChatMessageException("채팅 메시지를 찾을 수 없습니다.");
+        if (policy is not null && message.SenderUserId is { } sender
+            && (await policy.ResolveAsync(userId, [sender], cancellationToken))[sender].Blocked)
+            throw new ChatMessageException("차단한 사용자의 번역은 조회하거나 재시도할 수 없습니다.", "CHAT_CONTENT_BLOCKED");
         var rows = await context.ChatMessageTranslations.FromSqlInterpolated($"""
             SELECT * FROM chat_message_translation
             WHERE chat_message_id = {messageId} AND language_code = {languageCode} AND deleted_at IS NULL

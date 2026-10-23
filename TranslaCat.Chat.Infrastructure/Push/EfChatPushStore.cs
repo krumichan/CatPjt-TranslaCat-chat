@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.Core;
 using TranslaCat.Chat.Infrastructure.Persistence;
+using TranslaCat.Chat.Application.Safety;
 
 namespace TranslaCat.Chat.Infrastructure.Push;
 
-public sealed class EfChatPushStore(IDbContextFactory<ChatDbContext> contexts, ChatPushOptions options) : IChatPushStore
+public sealed class EfChatPushStore(IDbContextFactory<ChatDbContext> contexts, ChatPushOptions options,
+    IChatContentPolicy? contentPolicy = null) : IChatPushStore
 {
     public async Task<IReadOnlyList<long>> CandidatesAsync(bool deliveries, CancellationToken token)
     {
@@ -76,6 +78,8 @@ public sealed class EfChatPushStore(IDbContextFactory<ChatDbContext> contexts, C
     public async Task<bool> EligibleAsync(ChatPushOutboxEntity job, CancellationToken token)
     {
         await using var db = await contexts.CreateDbContextAsync(token);
+        if (contentPolicy is not null && await db.ChatAccountDeletions.AnyAsync(row => row.UserId == job.SenderUserId
+            || row.UserId == job.RecipientUserId, token)) return false;
 
         // 전역 off와 다시 켜기 이전의 대기 알림을 차단한다. 읽음·멤버십 데이터는 바꾸지 않는다.
         if (await db.ChatNotificationPreferences.AnyAsync(row => row.UserId == job.RecipientUserId

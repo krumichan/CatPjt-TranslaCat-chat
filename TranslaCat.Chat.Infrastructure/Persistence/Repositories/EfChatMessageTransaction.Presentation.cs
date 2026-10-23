@@ -17,6 +17,10 @@ public sealed partial class EfChatMessageTransaction
                 return Array.Empty<ChatMessageView>();
             }
 
+            var visibility = contentPolicy is null ? null : await contentPolicy.ResolveAsync(member.UserId,
+                messages.Where(row => row.SenderType == "USER" && row.MessageType != "SYSTEM" && row.SenderUserId != null)
+                    .Select(row => row.SenderUserId!.Value).Distinct().ToArray(), cancellationToken);
+
             // 반환할 window에 대해서만 번역과 미확인 인원을 읽는다.
             var ids = messages.Select(message => message.Id).ToArray();
             var translations = await context.ChatMessageTranslations.AsNoTracking()
@@ -52,9 +56,29 @@ public sealed partial class EfChatMessageTransaction
                 string? imageUrl = null;
                 long? senderUserId = message.SenderUserId;
                 OpenChatMessageSenderView? openSender = null;
+                var author = message.SenderUserId is { } authorId ? visibility?.GetValueOrDefault(authorId) : null;
+
+                // 차단 내용은 window/ID/cursor를 유지한 채 가린다. 저장 원문과 신고 증거는 변경하지 않는다.
+                if (author?.Blocked == true)
+                {
+                    responses.Add(new ChatMessageView(message.Id, message.ChatRoomId, null, null,
+                        null, null, null, message.SenderType, message.MessageType,
+                        "차단한 사용자의 메시지입니다.", message.Status, null, [], message.CreatedAt, message.UpdatedAt, null, "BLOCKED"));
+                    continue;
+                }
 
                 // OPEN 사람 발신자의 전역 신원은 응답에 포함하지 않는다. AI 표시는 원본 분기를 유지한다.
-                if (message.SenderType == "AI")
+                if (author?.AuthorDeleted == true)
+                {
+                    senderUserId = null;
+                    name = "탈퇴한 사용자";
+                    if (member.RoomType == "OPEN" && message.SenderUserId is { } deletedId)
+                    {
+                        var previous = await ResolveOpenSenderAsync(member.ChatRoomId, deletedId, cancellationToken);
+                        openSender = previous is null ? null : previous with { Nickname = "탈퇴한 사용자", ProfileImageUrl = null };
+                    }
+                }
+                else if (message.SenderType == "AI")
                 {
                     senderUserId = null;
                     if (message.SenderAiMemberId is not null)
@@ -88,7 +112,7 @@ public sealed partial class EfChatMessageTransaction
                     message.MessageType, message.Content, message.Status,
                     message.MessageType == "SYSTEM" ? null : unreadCounts.GetValueOrDefault(message.Id),
                     translationMap.GetValueOrDefault(message.Id) ?? Array.Empty<ChatMessageTranslationView>(),
-                    message.CreatedAt, message.UpdatedAt, openSender));
+                    message.CreatedAt, message.UpdatedAt, openSender, "VISIBLE", author?.AuthorDeleted == true));
             }
 
             return responses.AsReadOnly();

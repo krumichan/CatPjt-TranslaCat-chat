@@ -73,6 +73,8 @@ jobs:
           CHAT_MOBILE_PUSH_ENABLED: ${{ vars.CHAT_MOBILE_PUSH_ENABLED }}
           CHAT_MOBILE_PUSH_APP_ENVIRONMENT: ${{ vars.CHAT_MOBILE_PUSH_APP_ENVIRONMENT }}
           CHAT_MOBILE_PUSH_PROJECT_ID: ${{ vars.CHAT_MOBILE_PUSH_PROJECT_ID }}
+          CHAT_SAFETY_ENABLED: ${{ vars.CHAT_SAFETY_ENABLED }}
+          CHAT_ACCOUNT_DELETION_ENABLED: ${{ vars.CHAT_ACCOUNT_DELETION_ENABLED }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_IMAGE: ${{ steps.image.outputs.ref }}
         run: python3 deploy/oci/ship.py --service chat --image "$RELEASE_IMAGE"

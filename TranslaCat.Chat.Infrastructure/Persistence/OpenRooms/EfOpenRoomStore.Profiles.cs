@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using TranslaCat.Chat.Application.Messaging;
 using TranslaCat.Chat.Application.OpenRooms;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
+using TranslaCat.Chat.Infrastructure.Safety;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence.OpenRooms;
 
@@ -75,6 +76,7 @@ public sealed partial class EfOpenRoomStore
     {
         await using var context = await contexts.CreateDbContextAsync(token);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+        if (contentPolicy is not null) await ChatAccountWriteGate.AcquireAsync(context, [userId], token);
 
         // 첫 snapshot 조회 전에 방 lock을 얻어 종료/탈퇴 직후의 과거 membership을 읽지 않는다.
         // lock 조회 자체는 오류를 먼저 반환하지 않아 ban→membership→방 상태의 원본 판정 순서를 보존한다.
@@ -98,6 +100,10 @@ public sealed partial class EfOpenRoomStore
         {
             throw new OpenRoomDependencyUnavailableException();
         }
+        if (!ChatMessageText.IsBlank(oldKey) && contentPolicy is not null && imageJournal is null)
+            throw new OpenRoomDependencyUnavailableException();
+        if (!ChatMessageText.IsBlank(oldKey) && imageJournal is not null)
+            await imageJournal.TrackExistingAsync(userId, member.Id, oldKey!, token);
 
         if (deleteImage)
         {
@@ -118,7 +124,8 @@ public sealed partial class EfOpenRoomStore
         // 기존 object 삭제와 이벤트는 commit 이후에만 실행한다. 실패가 DB rollback을 의미하지 않는다.
         if (!ChatMessageText.IsBlank(oldKey))
         {
-            try
+            if (imageJournal is not null) await ProcessImageJournalAsync(userId);
+            else try
             {
                 await storage!.DeleteAsync(oldKey!, token);
             }

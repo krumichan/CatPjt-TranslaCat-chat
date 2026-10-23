@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using System.Data;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
@@ -16,11 +18,11 @@ public sealed partial class EfOpenMembershipStore(
     IOpenMembershipDelivery delivery,
     ILogger<EfOpenMembershipStore> logger,
     IChatRoomAccountReader? accounts = null,
-    IOpenProfileStorage? storage = null) : IOpenMembershipStore
+    IOpenProfileStorage? storage = null, IChatContentPolicy? policy = null) : IOpenMembershipStore
 {
     public Task<OpenRoomDetail> JoinAsync(long userId, long roomId, OpenOwnerProfile? profile, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(roomId, async (db, open, intents) =>
+        return ExecuteAsync(userId, roomId, async (db, open, intents) =>
         {
             // 정원과 복귀 판단은 같은 OPEN 설정 row 잠금으로 직렬화한다.
             EnsureOpen(open);
@@ -119,7 +121,7 @@ public sealed partial class EfOpenMembershipStore(
 
     public Task<OpenMembershipResult> LeaveAsync(long userId, long roomId, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(roomId, async (db, open, intents) =>
+        return ExecuteAsync(userId, roomId, async (db, open, intents) =>
         {
             var member = await ActiveMemberAsync(db, userId, roomId, token);
             if (member.Role == "OWNER")
@@ -143,11 +145,14 @@ public sealed partial class EfOpenMembershipStore(
         }, token);
     }
 
-    private async Task<T> ExecuteAsync<T>(long roomId,
+    private async Task<T> ExecuteAsync<T>(long userId, long roomId,
         Func<ChatDbContext, OpenChatRoomEntity, List<OpenMembershipIntent>, Task<T>> work, CancellationToken token)
     {
         await using var db = await contexts.CreateDbContextAsync(token);
+        long[] ids = policy is null ? [] : await db.ChatRoomMembers.AsNoTracking()
+            .Where(row => row.ChatRoomId == roomId && row.Active && row.DeletedAt == null).Select(row => row.UserId).ToArrayAsync(token);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(db, ids.Append(userId), token);
         var locked = roomId <= 0 ? [] : await db.OpenChatRooms
             .FromSqlInterpolated($"SELECT * FROM open_chat_room WHERE chat_room_id = {roomId} FOR UPDATE").ToListAsync(token);
         var open = locked.SingleOrDefault() ?? throw Error("OPEN 채팅방을 찾을 수 없습니다.", "ROOM_NOT_FOUND");

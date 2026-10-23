@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.Language;
 using TranslaCat.Chat.Application.Messaging;
@@ -8,13 +10,13 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Language;
 public sealed class EfChatLanguageStore(
     IDbContextFactory<ChatDbContext> contexts,
     IChatMessageProfileReader? profiles,
-    Func<DateTime> clock) : IChatLanguageStore
+    Func<DateTime> clock, IChatContentPolicy? policy = null) : IChatLanguageStore
 {
     public async Task<T> ExecuteAsync<T>(bool write, Func<IChatLanguageSession, CancellationToken, Task<T>> work, CancellationToken cancellationToken)
     {
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = write ? await context.Database.BeginTransactionAsync(cancellationToken) : null;
-        var result = await work(new Session(context, profiles, clock), cancellationToken);
+        var result = await work(new Session(context, profiles, clock, write && policy is not null), cancellationToken);
         if (write)
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -23,10 +25,11 @@ public sealed class EfChatLanguageStore(
         return result;
     }
 
-    private sealed class Session(ChatDbContext context, IChatMessageProfileReader? profiles, Func<DateTime> clock) : IChatLanguageSession
+    private sealed class Session(ChatDbContext context, IChatMessageProfileReader? profiles, Func<DateTime> clock, bool fenced) : IChatLanguageSession
     {
         public async Task<ChatLanguageValues?> GetDefaultAsync(long userId, CancellationToken cancellationToken)
         {
+            await FenceAsync(userId, cancellationToken);
             return await context.UserChatLanguageSettings.Where(value => value.UserId == userId)
                         .Select(value => new ChatLanguageValues(value.OriginalLanguageCode, value.TranslationLanguageCode,
                             value.ShowOriginal, value.ShowTranslation)).SingleOrDefaultAsync(cancellationToken);
@@ -34,6 +37,7 @@ public sealed class EfChatLanguageStore(
 
         public async Task<ChatRoomLanguageState> GetRoomAsync(long userId, long roomId, CancellationToken cancellationToken)
         {
+            await FenceAsync(userId, cancellationToken);
             return await context.ChatRoomMembers.Where(value => value.UserId == userId && value.ChatRoomId == roomId
                             && value.Active && value.DeletedAt == null)
                         .Select(value => new ChatRoomLanguageState(value.Id, value.OriginalLanguageCode, value.TranslationLanguageCode,
@@ -43,6 +47,7 @@ public sealed class EfChatLanguageStore(
 
         public async Task SaveDefaultAsync(long userId, ChatLanguageValues value, CancellationToken cancellationToken)
         {
+            await FenceAsync(userId, cancellationToken);
             // UserService.getById와 감사 identity의 외부 경계를 인증되지 않은 고정 값으로 대체하지 않는다.
             var audit = await AuditAsync(userId, cancellationToken);
             var entity = await context.UserChatLanguageSettings.SingleOrDefaultAsync(row => row.UserId == userId, cancellationToken);
@@ -62,6 +67,7 @@ public sealed class EfChatLanguageStore(
 
         public async Task SaveRoomAsync(long userId, long memberId, ChatLanguageValues? value, CancellationToken cancellationToken)
         {
+            await FenceAsync(userId, cancellationToken);
             var audit = await AuditAsync(userId, cancellationToken);
             var entity = await context.ChatRoomMembers.SingleAsync(row => row.Id == memberId && row.UserId == userId
                 && row.Active && row.DeletedAt == null, cancellationToken);
@@ -73,6 +79,12 @@ public sealed class EfChatLanguageStore(
             entity.ShowTranslation = value?.ShowTranslation ?? true;
             entity.UpdatedAt = clock();
             entity.UpdatedBy = audit;
+        }
+
+        private Task FenceAsync(long userId, CancellationToken token)
+        {
+            if (!fenced || context.LockedSafetyAccounts.Contains(userId)) return Task.CompletedTask;
+            return ChatAccountWriteGate.AcquireAsync(context, [userId], token);
         }
 
         private async Task<string> AuditAsync(long userId, CancellationToken cancellationToken)

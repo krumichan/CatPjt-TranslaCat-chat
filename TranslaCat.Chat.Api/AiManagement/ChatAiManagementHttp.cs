@@ -1,3 +1,4 @@
+using TranslaCat.Chat.Application.Safety;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -145,7 +146,7 @@ public static class ChatAiManagementExtensions
         services.AddScoped(provider => new EfChatAiManagementStore(
             provider.GetService<IDbContextFactory<ChatDbContext>>() ?? throw new ChatAiManagementUnavailableException(),
             provider.GetRequiredService<IOpenMembershipDelivery>(), provider.GetRequiredService<ILogger<EfChatAiManagementStore>>(),
-            provider.GetService<IChatRoomAccountReader>(), provider.GetService<IChatAiProfileStorage>()));
+            provider.GetService<IChatRoomAccountReader>(), provider.GetService<IChatAiProfileStorage>(), provider.GetService<IChatContentPolicy>()));
         services.AddScoped<IChatAiManagementStore>(provider => provider.GetRequiredService<EfChatAiManagementStore>());
         return services;
     }

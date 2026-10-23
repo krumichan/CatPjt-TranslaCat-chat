@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -11,7 +13,7 @@ public sealed class EfChatReadTransaction(
     IDbContextFactory<ChatDbContext> contexts,
     IChatReadRecipientResolver recipients,
     IChatReadEventDelivery delivery,
-    ILogger<EfChatReadTransaction> logger) : IChatReadTransaction
+    ILogger<EfChatReadTransaction> logger, IChatContentPolicy? policy = null) : IChatReadTransaction
 {
     public async Task<ChatRoomReadResponse> ExecuteAsync(
         Func<IChatReadSession, CancellationToken, Task<ChatRoomReadResponse>> work,
@@ -20,7 +22,7 @@ public sealed class EfChatReadTransaction(
         // 요청마다 독립 context/connection/transaction을 사용한다. 프로세스 내 lock으로 대신하지 않는다.
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
-        var session = new Session(context, recipients);
+        var session = new Session(context, recipients, policy);
         var response = await work(session, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         await transaction.CommitAsync(cancellationToken);
@@ -57,7 +59,7 @@ public sealed class EfChatReadTransaction(
         return response;
     }
 
-    private sealed class Session(ChatDbContext context, IChatReadRecipientResolver recipients) : IChatReadSession
+    private sealed class Session(ChatDbContext context, IChatReadRecipientResolver recipients, IChatContentPolicy? policy) : IChatReadSession
     {
         private ChatRoomMemberEntity? lockedMember;
         public List<object> Intents { get; } = [];
@@ -90,6 +92,7 @@ public sealed class EfChatReadTransaction(
 
         public async Task<ChatReadMember?> FindActiveMemberForUpdateAsync(long chatRoomId, long loginUserId, CancellationToken cancellationToken)
         {
+            if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context, [loginUserId], cancellationToken);
             // 최신 행을 lock read로 읽어 같은 membership의 cursor 갱신을 commit까지 직렬화한다.
             var members = await context.ChatRoomMembers.FromSqlInterpolated($"SELECT * FROM chat_room_member WHERE chat_room_id = {chatRoomId} AND user_id = {loginUserId} AND active = 1 AND deleted_at IS NULL FOR UPDATE")
                 .ToListAsync(cancellationToken);
@@ -142,6 +145,7 @@ public sealed class EfChatReadTransaction(
 
         public async Task<long> CountUnreadAsync(long loginUserId, long chatRoomId, CancellationToken cancellationToken)
         {
+            long[] blocked = policy is null ? [] : (await policy.BlockedSendersAsync(loginUserId, cancellationToken)).ToArray();
             // flush된 같은 transaction을 조회한다. SYSTEM·본인·가입 전·삭제 메시지를 제외한다.
             return await (from member in context.ChatRoomMembers
                           from message in context.ChatMessages
@@ -152,6 +156,7 @@ public sealed class EfChatReadTransaction(
                               && message.CreatedAt >= member.JoinedAt
                               && (message.SenderType == "AI" || (message.SenderType == "USER"
                                   && message.SenderUserId.HasValue && message.SenderUserId.Value != loginUserId))
+                              && (message.SenderUserId == null || !blocked.Contains(message.SenderUserId.Value))
                               && (member.LastReadMessageId == null || message.Id > member.LastReadMessageId)
                           select message.Id).LongCountAsync(cancellationToken);
         }

@@ -11,6 +11,24 @@ OWNER = 'translacat-oci-v1'
 REDIS_IMAGE = 'redis:7.4.10-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2'
 class DeployError(Exception): pass
 
+def parse_runtime_config(raw):
+    # safety만 중복을 거절하고 다른 기존 JSON 필드의 last-wins 계약은 유지한다.
+    objects=[]
+    def pairs(items):
+        value=dict(items); seen=set(); duplicates=set()
+        for name,_ in items:
+            if name in seen: duplicates.add(name)
+            seen.add(name)
+        objects.append((value,duplicates))
+        return value
+    value=json.loads(raw,object_pairs_hook=pairs)
+    if isinstance(value,dict) and value.get('service')=='chat':
+        for current,duplicates in objects:
+            if ((current is value and 'safety' in duplicates)
+                    or (current is value.get('safety') and duplicates)):
+                raise DeployError('DUPLICATE_CHAT_SAFETY_JSON')
+    return value
+
 def need(ok, code):
     if not ok: raise DeployError(code)
 
@@ -99,6 +117,13 @@ def signing(value, name):
     need(len(raw)>=32,'SHORT_SIGNING_KEY:' + name)
     return value
 
+def chat_safety(c):
+    value=c.get('safety',{})
+    fields=('enabled','account_deletion_enabled')
+    need(isinstance(value,dict) and set(value)<=set(fields),'INVALID_CHAT_SAFETY')
+    need(all(type(value.get(name,False)) is bool for name in fields),'INVALID_CHAT_SAFETY_BOOLEAN')
+    return {name:value.get(name,False) for name in fields}
+
 def validate(c, service):
     need(c.get('service')==service,'SERVICE_MISMATCH')
     need(c.get('schema_version')==1,'CONFIG_VERSION')
@@ -130,6 +155,7 @@ def validate(c, service):
         origin(c['be_url'],'be_url'); origin(c['browser_origin'],'browser_origin')
         native_origin(c)
         mobile_push(c)
+        chat_safety(c)
         vals=[signing(c[k],k) for k in ('user_jwt_key_base64','ingress_key_base64','identity_key_base64')]
         need(len(set(vals))==3 and c['ai_api_key'] not in vals,'DIRECTION_KEYS_MUST_DIFFER')
         redis=c['redis']; one_line(redis['container_name'],'redis.container_name'); one_line(redis['network'],'redis.network')
@@ -168,6 +194,7 @@ def connection(c, migrate=False):
 def materialize(c, release, migrate=False):
     native=native_origin(c) if c['service']=='chat' else None
     push=mobile_push(c) if c['service']=='chat' else None
+    safety=chat_safety(c) if c['service']=='chat' else None
     service=c['service']; dst=release/('migration' if migrate else 'runtime')
     dst.mkdir(mode=0o700)
     if os.geteuid()==0: os.chown(dst,10001,10001)
@@ -196,6 +223,8 @@ def materialize(c, release, migrate=False):
             env.update({
                 'AllowedHosts':'localhost;127.0.0.1;'+urlparse(c['public_url']).hostname,
                 'Chat__SourceTimeZone':c['timezone'],
+                'Chat__Safety__Enabled':'true' if safety['enabled'] else 'false',
+                'Chat__Safety__AccountDeletionEnabled':'true' if safety['account_deletion_enabled'] else 'false',
                 'Chat__Database__ConnectionString_FILE':'/run/config/db_connection',
                 'Chat__Authentication__Enabled':'true','Chat__Authentication__Base64SigningKey_FILE':'/run/config/user_jwt',
                 'Chat__Redis__Endpoint':c['redis']['container_name']+':6379','Chat__Redis__User':'chat',
@@ -418,7 +447,7 @@ def main():
         raise DeployError('DEPLOYMENT_INTERRUPTED')
     for sig in (signal.SIGTERM,signal.SIGHUP,signal.SIGINT): signal.signal(sig,interrupted)
     try:
-        c=validate(json.loads(a.config.read_text()),a.service)
+        c=validate(parse_runtime_config(a.config.read_text()),a.service)
         origin(c['public_url'],'public_url');need(urlparse(c['public_url']).port==8443,'PUBLIC_HTTPS_PORT_MUST_BE_8443');one_line(c['registry_user'],'registry_user')
         deploy(c,a.image,a.sha,a.release_id,a.registry_token)
     except (DeployError,KeyError,ValueError,TypeError,OSError) as error:

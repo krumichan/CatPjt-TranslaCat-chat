@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -27,6 +29,7 @@ public sealed partial class EfChatAiManagementStore : IChatAiImageStore
     {
         await using var db = await contexts.CreateDbContextAsync(token);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(db, [userId], token);
         IChatProfileImageObjectStore? objects = null;
         string? newKey = null;
         string? oldKey = null;

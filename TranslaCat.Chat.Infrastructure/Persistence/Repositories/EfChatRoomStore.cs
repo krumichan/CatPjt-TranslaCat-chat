@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.Language;
 using TranslaCat.Chat.Application.Presence;
 using TranslaCat.Chat.Application.Rooms;
+using TranslaCat.Chat.Application.Safety;
+using TranslaCat.Chat.Infrastructure.Safety;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence.Repositories;
@@ -10,7 +12,7 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Repositories;
 public sealed class EfChatRoomStore(
     IDbContextFactory<ChatDbContext> contexts,
     IChatRoomAccountReader? accounts = null,
-    ChatPresenceCoordinator? presence = null) : IChatRoomStore
+    ChatPresenceCoordinator? presence = null, IChatContentPolicy? contentPolicy = null) : IChatRoomStore
 {
     public async Task<long> CreateOrReuseAsync(long userId, ChatRoomCreateRequest request,
         IReadOnlyList<long?> distinctMembers, DateTime now, CancellationToken cancellationToken)
@@ -19,6 +21,8 @@ public sealed class EfChatRoomStore(
         await directory.EnsureUserExistsAsync(userId, cancellationToken);
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
+        if (contentPolicy is not null) await ChatAccountWriteGate.AcquireAsync(context,
+            distinctMembers.Where(id => id != null).Select(id => id!.Value).Prepend(userId), cancellationToken);
 
         // 원본처럼 MANUAL DIRECT만 재사용하며 정확히 활성 회원 두 명인 가장 이른 방을 선택한다.
         // 원본에 없는 pair unique/분산 lock을 주장하지 않는다. 동시 최초 생성의 중복 위험은 별도 gate다.
@@ -122,6 +126,7 @@ public sealed class EfChatRoomStore(
 
     public async Task<IReadOnlyList<ChatRoomListItem>> ListAsync(long userId, CancellationToken cancellationToken)
     {
+        long[] blocked = contentPolicy is null ? [] : (await contentPolicy.BlockedSendersAsync(userId, cancellationToken)).ToArray();
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
         var rooms = await context.ChatRooms.AsNoTracking().Where(room => room.Active && room.DeletedAt == null
@@ -137,6 +142,7 @@ public sealed class EfChatRoomStore(
                 && message.Status == "SENT" && message.DeletedAt == null && message.MessageType != "SYSTEM"
                 && message.CreatedAt >= mine.JoinedAt
                 && (message.SenderType == "AI" || (message.SenderType == "USER" && message.SenderUserId.HasValue && message.SenderUserId.Value != userId))
+                && (message.SenderUserId == null || !blocked.Contains(message.SenderUserId.Value))
                 && (mine.LastReadMessageId == null || message.Id > mine.LastReadMessageId), cancellationToken);
             result.Add(new(room.Id, room.RoomType, room.SourceType, room.Name, room.Description,
                 room.RoomType == "OPEN" ? null : room.OwnerId, members.Count, unread, room.CreatedAt, room.UpdatedAt,

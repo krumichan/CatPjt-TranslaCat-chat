@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using System.Data;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -15,7 +17,7 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.OpenInvitations;
 
 public sealed class EfOpenInvitationStore(IDbContextFactory<ChatDbContext> contexts, IChatMembershipDirectory directory,
     IChatActivityNotificationDelivery delivery, ILogger<EfOpenInvitationStore> logger,
-    Func<(DateTime LocalNow, DateTime UtcNow)> clock) : IOpenInvitationStore
+    Func<(DateTime LocalNow, DateTime UtcNow)> clock, IChatContentPolicy? policy = null) : IOpenInvitationStore
 {
     public const string SourcePrefix = "open-link:";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -24,7 +26,10 @@ public sealed class EfOpenInvitationStore(IDbContextFactory<ChatDbContext> conte
         CancellationToken token)
     {
         await using var db = await contexts.CreateDbContextAsync(token);
+        var prefetched = policy is null ? null : await directory.FindByPublicIdAsync(request.TargetPublicId, token);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
+        if (policy is not null)
+            await ChatAccountWriteGate.AcquireAsync(db, prefetched is null ? [userId] : new[] { userId, prefetched.Id }, token);
 
         // 모든 초대는 actor gate → OPEN 방 row 순서로 잠근다. 신규 gate 경합도 upsert가 직렬화한다.
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chat_open_invitation_sender_gate (actor_user_id, touched_at_utc) VALUES ({userId}, UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE actor_user_id = actor_user_id", token);
@@ -66,6 +71,7 @@ public sealed class EfOpenInvitationStore(IDbContextFactory<ChatDbContext> conte
             || await db.OpenChatBans.AnyAsync(row => row.ChatRoomId == roomId && row.TargetUserId == target.Id && row.ReleasedAt == null, token)
             || await db.ChatRoomMembers.AnyAsync(row => row.ChatRoomId == roomId && row.UserId == target.Id && row.Active && row.DeletedAt == null, token))
             throw Error("해당 대상으로 초대를 보낼 수 없습니다.", "TARGET_UNAVAILABLE");
+        if (policy is not null) ChatAccountWriteGate.RequireHeld(db, target.Id);
         var actor = await directory.FindByIdAsync(userId, token) ?? throw new OpenInvitationDependencyUnavailableException();
 
         // 잠금과 Core 조회를 기다린 뒤 현재 시각을 한 번 읽는다. 대기 전 시각으로 rate/TTL을 계산하지 않는다.

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
@@ -83,6 +84,11 @@ public sealed class HttpChatIdentityResolverTests
     {
         // 준비
         await using var host = await IdentityHost.StartAsync(scenario);
+        // cold JWT/JSON 준비는 1초 HTTP 제한을 먼저 소진할 수 있다. 실제 응답 파서 검증과 초기화를 분리한다.
+        // 제품의 deadline과 아래 Hits/assertion, 별도 timeout 테스트는 그대로 유지한다.
+        _ = ChatServiceJwt.Issue(host.SigningSettings, "Development", "chat-identity", "chat:identity:read", 73, ChatServiceJwtTests.Now);
+        using var prepared = JsonContent.Create(new { subject = host.Lookup.Subject, tokenUserId = host.Lookup.TokenUserId });
+        _ = await prepared.ReadAsByteArrayAsync();
 
         // 실행
         var error = await Assert.ThrowsAsync<ChatIdentityUnavailableException>(() => host.Resolver.ResolveAsync(host.Lookup, CancellationToken.None));

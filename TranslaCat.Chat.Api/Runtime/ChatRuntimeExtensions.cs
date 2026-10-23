@@ -20,6 +20,8 @@ using TranslaCat.Chat.Api.ProfileImages;
 using TranslaCat.Chat.Api.Read;
 using TranslaCat.Chat.Api.Realtime;
 using TranslaCat.Chat.Api.Rooms;
+using TranslaCat.Chat.Api.Safety;
+using TranslaCat.Chat.Application.Safety;
 using TranslaCat.Chat.Api.Translation;
 using TranslaCat.Chat.Application.Ai;
 using TranslaCat.Chat.Application.Messaging;
@@ -55,6 +57,7 @@ public static class ChatRuntimeExtensions
         services.AddChatAiManagementHttp();
         services.AddChatMemberQueryHttp();
         services.AddChatProfileImageHttp();
+        services.AddChatSafety(configuration);
         services.AddChatTranslation(configuration.GetSection("Chat:Translation").Get<ChatTranslationOptions>() ?? new());
         services.AddChatAi(configuration.GetSection("Chat:Ai").Get<ChatAiOptions>() ?? new());
         services.AddHttpContextAccessor();
@@ -98,18 +101,18 @@ public static class ChatRuntimeExtensions
             provider.GetRequiredService<IDbContextFactory<ChatDbContext>>(),
             provider.GetRequiredService<IChatReadRecipientResolver>(),
             provider.GetService<IChatReadEventDelivery>() ?? throw new ChatReadAdapterUnavailableException(),
-            provider.GetRequiredService<ILogger<EfChatReadTransaction>>()));
+            provider.GetRequiredService<ILogger<EfChatReadTransaction>>(), provider.GetService<IChatContentPolicy>()));
         services.AddScoped<IChatRealtimeAccess, EfChatRealtimeAccess>();
         services.AddScoped<IChatMessageEventDelivery, ChatMessageRealtimeDelivery>();
         services.AddScoped<IChatMessageTransaction>(provider => new EfChatMessageTransaction(
             provider.GetRequiredService<IDbContextFactory<ChatDbContext>>(),
             provider.GetService<IChatMessageProfileReader>() ?? throw new ChatMessageDependencyUnavailableException("account profile/storage"),
             provider.GetRequiredService<IChatMessageEventDelivery>(),
-            provider.GetRequiredService<ILogger<EfChatMessageTransaction>>()));
+            provider.GetRequiredService<ILogger<EfChatMessageTransaction>>(), provider.GetService<IChatContentPolicy>()));
         services.AddScoped<IChatRealtimeMessageSender>(provider => provider.GetRequiredService<ChatMessageService>());
         services.AddScoped<IChatRoomStore>(provider => new EfChatRoomStore(
             provider.GetRequiredService<IDbContextFactory<ChatDbContext>>(), provider.GetService<IChatRoomAccountReader>(),
-            provider.GetService<ChatPresenceCoordinator>()));
+            provider.GetService<ChatPresenceCoordinator>(), provider.GetService<IChatContentPolicy>()));
         return services;
     }
 

@@ -1,3 +1,4 @@
+using TranslaCat.Chat.Application.Safety;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +34,7 @@ public static class OpenModerationExtensions
         services.TryAddScoped<IOpenModerationStore>(provider => new EfOpenModerationStore(
             provider.GetRequiredService<IDbContextFactory<ChatDbContext>>(), provider.GetRequiredService<ILogger<EfOpenModerationStore>>(),
             provider.GetService<IChatRoomAccountReader>(), provider.GetService<IChatMembershipDirectory>(),
-            provider.GetService<IOpenProfileStorage>(), provider.GetService<IOpenMembershipDelivery>(), provider.GetService<IOpenBanEventDelivery>()));
+            provider.GetService<IOpenProfileStorage>(), provider.GetService<IOpenMembershipDelivery>(), provider.GetService<IOpenBanEventDelivery>(), provider.GetService<IChatContentPolicy>()));
         return services;
     }
 }

@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -12,13 +14,29 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Membership;
 public sealed class EfChatMembershipStore(
     IDbContextFactory<ChatDbContext> contexts,
     IChatMembershipEventDelivery? delivery,
-    ILogger<EfChatMembershipStore>? logger = null) : IChatMembershipStore
+    ILogger<EfChatMembershipStore>? logger = null, IChatContentPolicy? policy = null) : IChatMembershipStore
 {
-    public async Task<T> ExecuteAsync<T>(Func<IChatMembershipSession, CancellationToken, Task<T>> work, CancellationToken cancellationToken)
+    public bool UsesAccountFencing => policy is not null;
+    public async Task<IReadOnlyList<long>> ReadAccountsForFenceAsync(long roomId, CancellationToken token)
+    {
+        await using var db = await contexts.CreateDbContextAsync(token);
+        return await db.ChatRoomMembers.AsNoTracking().Where(row => row.ChatRoomId == roomId && row.Active && row.DeletedAt == null)
+            .Select(row => row.UserId).Distinct().ToArrayAsync(token);
+    }
+    public Task<T> ExecuteAsync<T>(Func<IChatMembershipSession, CancellationToken, Task<T>> work, CancellationToken token)
+        => ExecuteCoreAsync(null, work, token);
+    public Task<T> ExecuteForAccountsAsync<T>(IReadOnlyList<long> accounts,
+        Func<IChatMembershipSession, CancellationToken, Task<T>> work, CancellationToken token)
+        => ExecuteCoreAsync(accounts, work, token);
+    private async Task<T> ExecuteCoreAsync<T>(IReadOnlyList<long>? accounts,
+        Func<IChatMembershipSession, CancellationToken, Task<T>> work, CancellationToken cancellationToken)
     {
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
-        var session = new Session(context);
+        if (policy is not null)
+            await ChatAccountWriteGate.AcquireAsync(context, accounts
+                ?? throw new ChatSafetyException("CHAT_ACCOUNT_FENCE_REQUIRED", "계정 상태를 다시 확인해 주세요."), cancellationToken);
+        var session = new Session(context, policy is not null);
         var result = await work(session, cancellationToken);
         if (session.Intents.Count > 0)
         {
@@ -56,7 +74,7 @@ public sealed class EfChatMembershipStore(
         return result;
     }
 
-    private sealed class Session(ChatDbContext context) : IChatMembershipSession
+    private sealed class Session(ChatDbContext context, bool fenced) : IChatMembershipSession
     {
         public List<ChatMembershipIntent> Intents { get; } = [];
 
@@ -94,6 +112,7 @@ public sealed class EfChatMembershipStore(
 
         public async Task<ChatMembershipRoom> CreateFriendDirectAsync(ChatMembershipUser owner, DateTime now, CancellationToken cancellationToken)
         {
+            if (fenced) ChatAccountWriteGate.RequireHeld(context, owner.Id);
             var room = new ChatRoomEntity
             {
                 RoomType = "DIRECT",
@@ -111,6 +130,7 @@ public sealed class EfChatMembershipStore(
 
         public async Task<ChatMembershipRoom> CreateGroupAsync(string? name, string? description, ChatMembershipUser owner, string sourceType, DateTime now, CancellationToken cancellationToken)
         {
+            if (fenced) ChatAccountWriteGate.RequireHeld(context, owner.Id);
             var room = new ChatRoomEntity
             {
                 RoomType = "GROUP",
@@ -131,6 +151,7 @@ public sealed class EfChatMembershipStore(
         public async Task<ChatMembershipMember> AddOrRestoreAsync(ChatMembershipRoom room, ChatMembershipUser user, string role,
             long? initialCursor, string auditIdentity, DateTime now, CancellationToken cancellationToken)
         {
+            if (fenced) ChatAccountWriteGate.RequireHeld(context, user.Id);
             var language = await context.UserChatLanguageSettings.Where(setting => setting.UserId == user.Id)
                 .Select(setting => new ChatLanguageValues(setting.OriginalLanguageCode, setting.TranslationLanguageCode,
                     setting.ShowOriginal, setting.ShowTranslation)).SingleOrDefaultAsync(cancellationToken) ?? ChatLanguageService.SystemDefault;

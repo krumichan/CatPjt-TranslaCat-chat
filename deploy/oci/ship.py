@@ -4,6 +4,24 @@ import argparse, ipaddress, json, os, re, shlex, shutil, subprocess, sys, tempfi
 from pathlib import Path
 from urllib.parse import urlparse
 
+def parse_runtime_config(raw):
+    # safety만 중복을 거절하고 다른 기존 JSON 필드의 last-wins 계약은 유지한다.
+    objects=[]
+    def pairs(items):
+        value=dict(items); seen=set(); duplicates=set()
+        for name,_ in items:
+            if name in seen: duplicates.add(name)
+            seen.add(name)
+        objects.append((value,duplicates))
+        return value
+    value=json.loads(raw,object_pairs_hook=pairs)
+    if isinstance(value,dict) and value.get('service')=='chat':
+        for current,duplicates in objects:
+            if ((current is value and 'safety' in duplicates)
+                    or (current is value.get('safety') and duplicates)):
+                raise RuntimeError('DUPLICATE_CHAT_SAFETY_JSON')
+    return value
+
 def checked(argv, *, env=None, timeout=1800, input=None, show=False):
     p=subprocess.run(argv,env=env,input=input,text=True,capture_output=not show,timeout=timeout)
     if p.returncode: raise RuntimeError('transport command failed: '+argv[0]+' exit='+str(p.returncode))
@@ -95,6 +113,26 @@ def apply_mobile_push(c, enabled, app_environment, project_id):
     updated=dict(c)
     updated['mobile_push']={'enabled':enabled=='true','app_environment':app_environment,'project_id':project_id}
     return updated
+
+def apply_safety(c, enabled, account_deletion_enabled):
+    # 공개 Actions 변수만 읽는다. 기존 유효 JSON은 빈 변수로 끄지 않고 최초 미구성만 false로 시작한다.
+    if c.get('service') != 'chat':
+        return c
+    existing=c.get('safety',{})
+    fields=('enabled','account_deletion_enabled')
+    if (not isinstance(existing,dict) or not set(existing)<=set(fields)
+            or any(type(existing.get(name,False)) is not bool for name in fields)):
+        raise RuntimeError('INVALID_EXISTING_CHAT_SAFETY')
+    selected={name:existing.get(name,False) for name in fields}
+    for name, value in zip(fields,(enabled,account_deletion_enabled)):
+        if value not in ('','true','false'):
+            raise RuntimeError('INVALID_CHAT_SAFETY_'+name.upper())
+        if value != '':
+            selected[name]=value=='true'
+    updated=dict(c)
+    updated['safety']=selected
+    return updated
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--service',choices=['ll','chat'],required=True)
     ap.add_argument('--image',required=True);a=ap.parse_args()
@@ -109,7 +147,7 @@ def main():
         tmp=Path(tmp);os.chmod(tmp,0o700)
         def secret(name,value):
             p=tmp/name;p.write_text(value,encoding='utf-8');p.chmod(0o600);return p
-        config=json.loads(os.environ['RUNTIME_CONFIG_JSON'])
+        config=parse_runtime_config(os.environ['RUNTIME_CONFIG_JSON'])
         if config.get('service')!=a.service: raise RuntimeError('runtime service mismatch')
         if urlparse(config.get('public_url','')).hostname!=host: raise RuntimeError('runtime public URL must match OCI_HOST')
         # CHAT origin 검사는 runtime 파일·키·SSH 처리를 시작하기 전에 끝낸다.
@@ -117,6 +155,8 @@ def main():
             config=apply_native_origin(config,os.environ.get('CHAT_NATIVE_ORIGIN',''))
             config=apply_mobile_push(config,os.environ.get('CHAT_MOBILE_PUSH_ENABLED',''),
                 os.environ.get('CHAT_MOBILE_PUSH_APP_ENVIRONMENT',''),os.environ.get('CHAT_MOBILE_PUSH_PROJECT_ID',''))
+            config=apply_safety(config,os.environ.get('CHAT_SAFETY_ENABLED',''),
+                os.environ.get('CHAT_ACCOUNT_DELETION_ENABLED',''))
         # Registry identity is derived from this workflow, not from an uploaded password.
         config['registry_user']=os.environ['GITHUB_ACTOR']
         runtime=secret('runtime.json',json.dumps(config,ensure_ascii=False))

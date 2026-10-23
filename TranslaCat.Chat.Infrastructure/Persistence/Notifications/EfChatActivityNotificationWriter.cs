@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MySql.Data.MySqlClient;
@@ -9,7 +11,7 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.Notifications;
 public sealed class EfChatActivityNotificationWriter(
     IDbContextFactory<ChatDbContext> contexts,
     IChatActivityNotificationDelivery? delivery,
-    Func<DateTime> clock) : IChatActivityNotificationWriter
+    Func<DateTime> clock, IChatContentPolicy? policy = null) : IChatActivityNotificationWriter
 {
     public async Task<ChatNotificationActivity?> CreateAsync(ChatActivityNotificationRequest request, CancellationToken cancellationToken)
     {
@@ -32,6 +34,8 @@ public sealed class EfChatActivityNotificationWriter(
         // 원본 REQUIRES_NEW처럼 source transaction과 분리한다. 계정 이메일은 호출자가 공유 소유 서비스에서 확인해야 한다.
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context,
+            request.ActorUserId is { } actor ? new[] { request.RecipientUserId, actor } : [request.RecipientUserId], cancellationToken);
         if (await context.ChatNotifications.AnyAsync(row => row.RecipientUserId == request.RecipientUserId
                 && row.NotificationType == request.NotificationType && row.SourceEventKey == request.SourceEventKey, cancellationToken))
         {

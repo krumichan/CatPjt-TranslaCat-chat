@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -15,13 +17,17 @@ public sealed partial class EfOpenModerationStore(
     IDbContextFactory<ChatDbContext> contexts, ILogger<EfOpenModerationStore> logger,
     IChatRoomAccountReader? accounts = null, IChatMembershipDirectory? directory = null,
     IOpenProfileStorage? storage = null, IOpenMembershipDelivery? membershipEvents = null,
-    IOpenBanEventDelivery? banEvents = null) : IOpenModerationStore
+    IOpenBanEventDelivery? banEvents = null, IChatContentPolicy? policy = null) : IOpenModerationStore
 {
     public async Task<OpenProfile> ChangeAdminAsync(long actorId, long roomId, long memberId, bool assign, DateTime now, CancellationToken token)
     {
         // 다른 OPEN 변경과 같은 방 lock을 얻은 뒤 actor/target 상태를 현재 값으로 판정한다.
         await using var context = await contexts.CreateDbContextAsync(token);
+        long? targetAccount = policy is null ? null : await context.ChatRoomMembers.AsNoTracking()
+            .Where(row => row.ChatRoomId == roomId && row.Id == memberId).Select(row => (long?)row.UserId).SingleOrDefaultAsync(token);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context,
+            targetAccount is null ? [actorId] : new[] { actorId, targetAccount.Value }, token);
         var room = await LockRoomAsync(context, roomId, token);
         var actor = await LockActorAsync(context, actorId, roomId, token);
         if (actor.Role != "OWNER")
@@ -30,6 +36,7 @@ public sealed partial class EfOpenModerationStore(
         }
 
         var target = await LockTargetAsync(context, memberId, roomId, token);
+        if (policy is not null) ChatAccountWriteGate.RequireHeld(context, target.UserId);
         if (assign && (actor.Id == target.Id || target.Role != "MEMBER"
             || await context.OpenChatBans.AnyAsync(ban => ban.ChatRoomId == roomId && ban.TargetUserId == target.UserId && ban.ReleasedAt == null, token)))
         {
@@ -62,11 +69,16 @@ public sealed partial class EfOpenModerationStore(
     {
         // 방 lock을 가장 먼저 획득하여 동시 ban/leave/close가 과거 snapshot을 사용하지 않게 한다.
         await using var context = await contexts.CreateDbContextAsync(token);
+        long? targetAccount = policy is null ? null : await context.ChatRoomMembers.AsNoTracking()
+            .Where(row => row.ChatRoomId == roomId && row.Id == memberId).Select(row => (long?)row.UserId).SingleOrDefaultAsync(token);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context,
+            targetAccount is null ? [actorId] : new[] { actorId, targetAccount.Value }, token);
         var room = await LockRoomAsync(context, roomId, token);
         var actor = await LockActorAsync(context, actorId, roomId, token);
         OpenModerationPolicy.ValidateModerator(actor.Role);
         var target = await LockTargetAsync(context, memberId, roomId, token);
+        if (policy is not null) ChatAccountWriteGate.RequireHeld(context, target.UserId);
         OpenModerationPolicy.ValidateBanTarget(actor.Id, actor.Role, target.Id, target.Role);
         if (await context.OpenChatBans.AnyAsync(ban => ban.ChatRoomId == roomId && ban.TargetUserId == target.UserId && ban.ReleasedAt == null, token))
         {
@@ -138,7 +150,11 @@ public sealed partial class EfOpenModerationStore(
     {
         // 현재 moderator 권한과 ban에 보존된 당시 역할을 함께 확인한다.
         await using var context = await contexts.CreateDbContextAsync(token);
+        long? targetAccount = policy is null ? null : await context.OpenChatBans.AsNoTracking()
+            .Where(row => row.ChatRoomId == roomId && row.Id == banId).Select(row => (long?)row.TargetUserId).SingleOrDefaultAsync(token);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context,
+            targetAccount is null ? [actorId] : new[] { actorId, targetAccount.Value }, token);
         await LockRoomAsync(context, roomId, token);
         var actor = await LockActorAsync(context, actorId, roomId, token);
         OpenModerationPolicy.ValidateModerator(actor.Role);

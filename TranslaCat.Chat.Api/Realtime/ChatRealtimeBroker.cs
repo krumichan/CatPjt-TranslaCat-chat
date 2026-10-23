@@ -3,6 +3,8 @@ using System.Globalization;
 using System.Net.WebSockets;
 using System.Text.Json;
 using TranslaCat.Chat.Application.Realtime;
+using TranslaCat.Chat.Api.Safety;
+using TranslaCat.Chat.Application.Core;
 
 namespace TranslaCat.Chat.Api.Realtime;
 
@@ -43,31 +45,35 @@ public sealed class ChatRealtimeBroker(IServiceScopeFactory scopeFactory)
         {
             foreach (var subscription in connection.Subscriptions.Values.Where(value => value.Destination == destination))
             {
-                // 탈퇴/강퇴 뒤 남은 구독으로 새 방 메시지를 받지 않도록 전달 직전에도 확인한다.
-                try
+                // socket sendLock을 기다린 뒤 현재 상태로 준비한다. 대기 전에 만든 개인정보 snapshot을 보내지 않는다.
+                await DeliverAsync(connection, subscription, async sendToken =>
                 {
-                    await using var scope = scopeFactory.CreateAsyncScope();
-                    var access = scope.ServiceProvider.GetRequiredService<IChatRealtimeAccess>();
-                    if (closureOnly)
+                    try
                     {
-                        await access.ValidateRoomClosureDeliveryAsync(connection.UserId, roomId, cancellationToken);
+                        await using var scope = scopeFactory.CreateAsyncScope();
+                        var access = scope.ServiceProvider.GetRequiredService<IChatRealtimeAccess>();
+                        var content = scope.ServiceProvider.GetService<ChatRealtimeContentPolicy>();
+                        if (content is not null) await content.RequireActiveAsync(connection.UserId, sendToken);
+                        if (closureOnly)
+                        {
+                            await access.ValidateRoomClosureDeliveryAsync(connection.UserId, roomId, sendToken);
+                            return json;
+                        }
+                        await access.ValidateRoomAccessAsync(connection.UserId, roomId, sendToken);
+                        return content is null ? json : await content.PrepareAsync(connection.UserId, roomId, json, sendToken);
                     }
-                    else
+                    catch (OperationCanceledException) when (sendToken.IsCancellationRequested) { throw; }
+                    catch (ChatCoreUnavailableException)
                     {
-                        await access.ValidateRoomAccessAsync(connection.UserId, roomId, cancellationToken);
+                        // 관계 조회 장애는 내용을 보내지 않되 구독을 영구 해제하지 않는다.
+                        return null;
                     }
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception)
-                {
-                    connection.Subscriptions.TryRemove(subscription.Id, out _);
-                    continue;
-                }
-
-                await DeliverAsync(connection, subscription, json, cancellationToken);
+                    catch (Exception)
+                    {
+                        connection.Subscriptions.TryRemove(subscription.Id, out _);
+                        return null;
+                    }
+                }, cancellationToken);
                 if (closureOnly)
                 {
                     connection.Subscriptions.TryRemove(subscription.Id, out _);
@@ -88,12 +94,30 @@ public sealed class ChatRealtimeBroker(IServiceScopeFactory scopeFactory)
         {
             foreach (var subscription in connection.Subscriptions.Values.Where(value => value.Destination == "/user" + queue))
             {
-                await DeliverAsync(connection, subscription, json, cancellationToken);
+                await DeliverAsync(connection, subscription, async sendToken =>
+                {
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    var content = scope.ServiceProvider.GetService<ChatRealtimeContentPolicy>();
+                    if (content is null) return json;
+                    try
+                    {
+                        await content.RequireActiveAsync(connection.UserId, sendToken);
+                        return await content.PreparePrivateAsync(connection.UserId, json, sendToken);
+                    }
+                    catch (OperationCanceledException) when (sendToken.IsCancellationRequested) { throw; }
+                    catch (Exception)
+                    {
+                        connection.StopPublishing();
+                        connection.Socket.Abort();
+                        return null;
+                    }
+                }, cancellationToken);
             }
         }
     }
 
-    private static async Task DeliverAsync(ChatRealtimeConnection connection, ChatRealtimeSubscription subscription, string json, CancellationToken cancellationToken)
+    private static async Task DeliverAsync(ChatRealtimeConnection connection, ChatRealtimeSubscription subscription,
+        Func<CancellationToken, Task<string?>> prepare, CancellationToken cancellationToken)
     {
         if (!connection.Subscriptions.TryGetValue(subscription.Id, out var current) || current != subscription)
         {
@@ -102,13 +126,23 @@ public sealed class ChatRealtimeBroker(IServiceScopeFactory scopeFactory)
 
         try
         {
-            await connection.SendAsync("MESSAGE", new Dictionary<string, string>
+            await connection.SendPreparedAsync("MESSAGE", new Dictionary<string, string>
             {
                 ["destination"] = subscription.Destination,
                 ["subscription"] = subscription.Id,
                 ["message-id"] = Guid.NewGuid().ToString("N"),
                 ["content-type"] = "application/json"
-            }, json, cancellationToken);
+            }, async token =>
+            {
+                if (!connection.Subscriptions.TryGetValue(subscription.Id, out var active) || active != subscription)
+                {
+                    return null;
+                }
+                var body = await prepare(token);
+                // 준비 중 해제된 구독에는 지연된 snapshot을 보내지 않는다.
+                return connection.Subscriptions.TryGetValue(subscription.Id, out active) && active == subscription
+                    ? body : null;
+            }, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -138,9 +172,12 @@ internal sealed class ChatRealtimeConnection(WebSocket socket, long userId, stri
         Interlocked.Exchange(ref closing, 1);
     }
 
-    public async Task SendAsync(string command, IReadOnlyDictionary<string, string>? headers, string body, CancellationToken cancellationToken)
+    public Task SendAsync(string command, IReadOnlyDictionary<string, string>? headers, string body, CancellationToken cancellationToken)
+        => SendPreparedAsync(command, headers, _ => Task.FromResult<string?>(body), cancellationToken);
+
+    public async Task SendPreparedAsync(string command, IReadOnlyDictionary<string, string>? headers,
+        Func<CancellationToken, Task<string?>> prepare, CancellationToken cancellationToken)
     {
-        var bytes = ChatStompEncoder.Encode(command, headers, body);
         // 동일 socket의 동시에 발생한 room/user 이벤트와 receipt를 하나씩 보낸다.
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
@@ -151,6 +188,10 @@ internal sealed class ChatRealtimeConnection(WebSocket socket, long userId, stri
             {
                 return;
             }
+            string? body = await prepare(timeout.Token);
+            if (body is null) return;
+            if (command == "MESSAGE" && Volatile.Read(ref closing) != 0) return;
+            var bytes = ChatStompEncoder.Encode(command, headers, body);
             await Socket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
         }
         finally

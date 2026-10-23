@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TranslaCat.Chat.Application.Messaging;
 using TranslaCat.Chat.Infrastructure.Persistence.Entities;
+using TranslaCat.Chat.Application.Safety;
+using TranslaCat.Chat.Infrastructure.Safety;
 
 namespace TranslaCat.Chat.Infrastructure.Persistence.Repositories;
 
@@ -10,7 +12,8 @@ public sealed partial class EfChatMessageTransaction(
     IDbContextFactory<ChatDbContext> contexts,
     IChatMessageProfileReader profiles,
     IChatMessageEventDelivery delivery,
-    ILogger<EfChatMessageTransaction> logger) : IChatMessageTransaction
+    ILogger<EfChatMessageTransaction> logger,
+    IChatContentPolicy? contentPolicy = null) : IChatMessageTransaction
 {
     public async Task<T> ExecuteAsync<T>(
         Func<IChatMessageSession, CancellationToken, Task<T>> work,
@@ -20,7 +23,7 @@ public sealed partial class EfChatMessageTransaction(
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(
             IsolationLevel.RepeatableRead, cancellationToken);
-        var session = new Session(context, profiles);
+        var session = new Session(context, profiles, contentPolicy);
         var response = await work(session, cancellationToken);
 
         if (session.Intents.Count > 0)
@@ -55,7 +58,7 @@ public sealed partial class EfChatMessageTransaction(
         return response;
     }
 
-    private sealed partial class Session(ChatDbContext context, IChatMessageProfileReader profiles) : IChatMessageSession
+    private sealed partial class Session(ChatDbContext context, IChatMessageProfileReader profiles, IChatContentPolicy? contentPolicy) : IChatMessageSession
     {
         public List<ChatMessageIntent> Intents { get; } = [];
 
@@ -67,8 +70,10 @@ public sealed partial class EfChatMessageTransaction(
         public async Task<ChatMessageMember> GetMemberAsync(
             long userId, long roomId, bool forSend, CancellationToken cancellationToken)
         {
+            if (contentPolicy is not null) await contentPolicy.RequireActiveAsync(userId, cancellationToken);
             if (forSend)
             {
+                if (contentPolicy is not null) await ChatAccountWriteGate.AcquireAsync(context, [userId], cancellationToken);
                 // 변경 요청은 최초 snapshot 전에 OPEN lifecycle → room → membership 순서로 잠근다.
                 // 종료/차단/탈퇴 commit 뒤 과거 snapshot으로 새 메시지를 쓰는 경합을 막는다.
                 await context.OpenChatRooms.FromSqlInterpolated(

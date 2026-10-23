@@ -9,7 +9,7 @@ public sealed partial class EfChatAiManagementStore
 {
     public Task<ChatAiRoomSettings> RoomSettingsAsync(long userId, long roomId, ChatAiRoomPatch? patch, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(async (db, intents) =>
+        return ExecuteAsync(userId, async (db, intents) =>
         {
             // 조회도 원본처럼 기본 설정을 저장한다. 동시 최초 생성은 동일 방 잠금으로 직렬화한다.
             await AccessAsync(db, userId, roomId, manage: patch is not null, write: true, token);
@@ -45,7 +45,7 @@ public sealed partial class EfChatAiManagementStore
 
     public Task<ChatAiSystemSettings> SystemSettingsAsync(long userId, ChatAiSystemPatch? patch, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(async (db, intents) =>
+        return ExecuteAsync(userId, async (db, intents) =>
         {
             var audit = await AuditAsync(userId, token);
             var entity = await EfChatAiSystemSettings.GetOrCreateWithinAsync(db, now, audit, token, forUpdate: patch is not null);

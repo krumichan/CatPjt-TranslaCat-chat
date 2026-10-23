@@ -1,3 +1,5 @@
+using TranslaCat.Chat.Infrastructure.Safety;
+using TranslaCat.Chat.Application.Safety;
 using Microsoft.EntityFrameworkCore;
 using TranslaCat.Chat.Application.OpenMembership;
 using TranslaCat.Chat.Application.OpenRooms;
@@ -8,7 +10,7 @@ public sealed partial class EfOpenMembershipStore
 {
     public Task<OpenRoomDetail> TransferAsync(long userId, long roomId, long? targetMemberId, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(roomId, async (db, open, intents) =>
+        return ExecuteAsync(userId, roomId, async (db, open, intents) =>
         {
             // 역할 변경과 방 ownerId 변경을 하나의 방 잠금/transaction으로 묶는다.
             EnsureOpen(open);
@@ -26,6 +28,7 @@ public sealed partial class EfOpenMembershipStore
                 throw Error(target is null ? "OWNER 위임 대상 멤버를 찾을 수 없습니다." : "자기 자신에게 OWNER를 위임할 수 없습니다.", "OWNER_TRANSFER_TARGET_INVALID");
             }
 
+            if (policy is not null) ChatAccountWriteGate.RequireHeld(db, target.UserId);
             var audit = await AuditAsync(userId, token);
             var room = await db.ChatRooms.SingleAsync(row => row.Id == roomId, token);
             current.Role = "MEMBER";
@@ -45,7 +48,7 @@ public sealed partial class EfOpenMembershipStore
 
     public Task<OpenRoomDetail> CloseAsync(long userId, long roomId, DateTime now, CancellationToken token)
     {
-        return ExecuteAsync(roomId, async (db, open, intents) =>
+        return ExecuteAsync(userId, roomId, async (db, open, intents) =>
         {
             var owner = await ActiveMemberAsync(db, userId, roomId, token);
             EnsureOwner(owner);
