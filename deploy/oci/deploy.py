@@ -329,6 +329,49 @@ def wait_ready(service, seconds=300):
         time.sleep(3)
     return False
 
+def verify_chat_https_ready(c, cfg):
+    # 로컬 첫 READY 직후의 일시적인 503만 재확인한다. TLS/설정/다른 HTTP 오류는 즉시 실패한다.
+    need(c.get('service')=='chat','CHAT_HTTPS_READINESS_SERVICE_REQUIRED')
+    public=origin(c['public_url'],'public_url')
+    need(urlparse(public).port==8443,'PUBLIC_HTTPS_PORT_MUST_BE_8443')
+    url=public+'/api/ready'
+    end=time.monotonic()+30
+
+    while True:
+        remaining=end-time.monotonic()
+        need(remaining>0,'CHAT_HTTPS_READINESS_503_TIMEOUT')
+        budget=min(15,remaining)
+        args=['curl','--fail','--silent','--show-error',
+            '--connect-timeout',str(min(5,budget)),'--max-time',str(budget),
+            '--cacert',str(cfg/'service-ca.pem'),
+            '--resolve',f'{urlparse(url).hostname}:8443:127.0.0.1',
+            '--write-out','\n%{http_code}',url]
+        try:
+            response=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                timeout=budget,text=True)
+        except (subprocess.TimeoutExpired,OSError,UnicodeError):
+            raise DeployError('CHAT_HTTPS_READINESS_TRANSPORT_FAILED') from None
+
+        body,separator,status=response.stdout.rpartition('\n')
+        need(separator and re.fullmatch('[0-9]{3}',status) is not None,
+             'CHAT_HTTPS_READINESS_INVALID_RESPONSE')
+        if response.returncode==22 and status=='503':
+            remaining=end-time.monotonic()
+            need(remaining>0,'CHAT_HTTPS_READINESS_503_TIMEOUT')
+            time.sleep(min(3,remaining))
+            continue
+
+        # 프록시의 200만으로 성공하지 않는다. 기존 애플리케이션 READY 의미를 그대로 확인한다.
+        need(response.returncode==0 and status=='200','CHAT_HTTPS_READINESS_REQUEST_FAILED')
+        try:
+            value=json.loads(body)
+        except (ValueError,RecursionError):
+            raise DeployError('CHAT_HTTPS_READINESS_INVALID_BODY') from None
+        need(isinstance(value,dict) and value.get('status')=='READY',
+             'CHAT_HTTPS_READINESS_NOT_READY')
+        need(time.monotonic()<=end,'CHAT_HTTPS_READINESS_503_TIMEOUT')
+        return
+
 def assert_vm_role(c):
     # IMDS read only; abort before migrations if Secrets select the wrong OCI VM.
     try:
@@ -400,9 +443,12 @@ def deploy(c, image, sha, release_id, token_path):
             run(['docker','start',current])
             need(wait_ready(c['service']),'APPLICATION_READINESS_FAILED')
             # Check TLS edge/proxy end to end, not just the localhost app.
-            u=c['public_url'].rstrip('/')+('/health/ready' if c['service']=='ll' else '/api/ready')
-            run(['curl','--fail','--silent','--show-error','--connect-timeout','5','--max-time','15',
-                '--cacert',str(cfg/'service-ca.pem'),'--resolve',f'{urlparse(u).hostname}:8443:127.0.0.1',u])
+            if c['service']=='chat':
+                verify_chat_https_ready(c,cfg)
+            else:
+                u=c['public_url'].rstrip('/')+'/health/ready'
+                run(['curl','--fail','--silent','--show-error','--connect-timeout','5','--max-time','15',
+                    '--cacert',str(cfg/'service-ca.pem'),'--resolve',f'{urlparse(u).hostname}:8443:127.0.0.1',u])
             (release/'result.json').write_text(json.dumps({'status':'DEPLOYED_READY','sha':sha,'image':image,
                 'service':c['service'],'previous_container':backup if previous else None,
                 'business_e2e':'NOT_RUN','database_rollback':'NEVER_AUTOMATIC'},indent=2))
