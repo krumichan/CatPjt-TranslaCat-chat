@@ -1,0 +1,75 @@
+name: Source style CHAT integration verification
+on:
+  push:
+    branches: [ci/source-style-chat-baseline-20261115]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4874eddee095e29469306de644f26630443b4de0
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "4874eddee095e29469306de644f26630443b4de0"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.401'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test against a new MySQL and Redis runtime owned by this run
+        run: |
+          set -euo pipefail
+          run_id=$(tr -d '-' </proc/sys/kernel/random/uuid)
+          password=$(openssl rand -hex 24)
+          redis_password=$(openssl rand -hex 24)
+          echo "::add-mask::$password"
+          echo "::add-mask::$redis_password"
+          mysql_id=
+          redis_id=
+          cleanup() {
+            for id in "$mysql_id" "$redis_id"; do
+              if [[ "$id" =~ ^[a-f0-9]{64}$ ]] &&
+                [[ "$(docker inspect --format '{{index .Config.Labels "translacat.chat.run"}}' "$id")" == "$run_id" ]]; then
+                docker rm -fv "$id" >/dev/null
+              fi
+            done
+          }
+          trap cleanup EXIT
+          mysql_id=$(MYSQL_ROOT_PASSWORD="$password" docker run -d --label "translacat.chat.run=$run_id" -e MYSQL_ROOT_PASSWORD -e MYSQL_ROOT_HOST=% -e MYSQL_DATABASE=translacat_chat -p 127.0.0.1::3306 mysql:8.4 --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci --default-time-zone=+00:00)
+          redis_id=$(docker run -d --label "translacat.chat.run=$run_id" -p 127.0.0.1::6379 redis:7.4.10-alpine redis-server --bind 0.0.0.0 --protected-mode yes --requirepass "$redis_password" --appendonly no --save '' --maxmemory 128mb --maxmemory-policy noeviction)
+          for attempt in {1..60}; do
+            if docker exec "$mysql_id" mysqladmin ping -h127.0.0.1 --silent >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          docker exec "$mysql_id" mysqladmin ping -h127.0.0.1 --silent
+          mysql_port=$(docker port "$mysql_id" 3306/tcp | cut -d: -f2)
+          redis_port=$(docker port "$redis_id" 6379/tcp | cut -d: -f2)
+          REDIS_PORT="$redis_port" REDIS_PASSWORD="$redis_password" python3 - <<'PY'
+          import os
+          import socket
+
+          password = os.environ['REDIS_PASSWORD'].encode()
+          with socket.create_connection(('127.0.0.1', int(os.environ['REDIS_PORT'])), timeout=8) as sock:
+              stream = sock.makefile('rb')
+              sock.sendall(b'*2\r\n$4\r\nAUTH\r\n$' + str(len(password)).encode() + b'\r\n' + password + b'\r\n')
+              assert stream.readline() == b'+OK\r\n', 'Runner cannot authenticate against isolated Redis'
+              sock.sendall(b'*1\r\n$4\r\nPING\r\n')
+              assert stream.readline() == b'+PONG\r\n', 'Isolated Redis did not answer from the runner'
+          PY
+          manifest="$(dirname "$GITHUB_WORKSPACE")/.codex-workspace/verification/chat/TestResults/V2/Runtime/$run_id/manifest.json"
+          mkdir -p "$(dirname "$manifest")"
+          jq -n --arg mysql "$mysql_id" --arg redis "$redis_id" --arg runId "$run_id" --argjson mysqlPort "$mysql_port" --argjson redisPort "$redis_port" '{testMode:true,$mysql,$redis,$runId,$mysqlPort,$redisPort,catalogs:["translacat_chat"]}' > "$manifest"
+          export CHAT_TEST_MANIFEST="$manifest" CHAT_TEST_RUN_ID="$run_id" CHAT_TEST_WORKSPACE="$GITHUB_WORKSPACE"
+          export CHAT_TEST_MYSQL="Server=127.0.0.1;Port=$mysql_port;User ID=root;Password=$password;SslMode=Disabled;AllowPublicKeyRetrieval=True;Connection Timeout=5;Default Command Timeout=10"
+          export CHAT_TEST_REDIS="127.0.0.1:$redis_port,password=$redis_password,abortConnect=false,connectTimeout=3000,syncTimeout=3000"
+          export CHAT_DATABASE_CONNECTION="$CHAT_TEST_MYSQL;Database=translacat_chat"
+          dotnet test TranslaCat.Chat.IntegrationTests/TranslaCat.Chat.IntegrationTests.csproj -c Release --filter 'FullyQualifiedName~DuplicateRegister_IsIdempotentAndPreservesInt64Identity' --logger 'trx;LogFileName=chat-integration.trx' --results-directory "$RUNNER_TEMP/chat-integration"
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: chat-integration-results
+          path: ${{ runner.temp }}/chat-integration/chat-integration.trx
