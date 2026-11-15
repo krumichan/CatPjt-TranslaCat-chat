@@ -9,7 +9,7 @@ const { createRequire } = require('node:module');
 const feRequire = createRequire(path.resolve(__dirname, '../../../CatPjt-TranslaCat-fe/package.json'));
 const { Client } = feRequire('@stomp/stompjs');
 const WebSocket = feRequire('next/dist/compiled/ws');
-class ProbeFailure extends Error {}
+class ProbeFailure extends Error { }
 
 function safeJson(text, stage) {
     try { return JSON.parse(text); }
@@ -103,7 +103,7 @@ async function connect(account, directSecond = false) {
     const client = new Client({
         webSocketFactory: () => new WebSocket(target.replace('http:', 'ws:') + '/ws/chat', { headers }),
         connectHeaders: { Authorization: 'Bearer ' + account.accessToken },
-        reconnectDelay: 0, heartbeatIncoming: 0, heartbeatOutgoing: 0, debug: () => {},
+        reconnectDelay: 0, heartbeatIncoming: 0, heartbeatOutgoing: 0, debug: () => { },
     });
     sessions.push(client);
     await new Promise((resolve, reject) => {
@@ -139,7 +139,7 @@ async function disconnect(client) {
     clearTimeout(timer);
     if (!completed) {
         await Promise.race([
-            client.deactivate({ force: true }).catch(() => {}),
+            client.deactivate({ force: true }).catch(() => { }),
             new Promise(resolve => setTimeout(resolve, 1000)),
         ]);
     }
@@ -256,8 +256,10 @@ async function main() {
         process.exitCode = 1;
     } finally {
         for (const client of sessions) await disconnect(client);
-        fs.writeFileSync(resultFile, JSON.stringify({ ...outcome, checks, actualBrowser: false,
-            configuredScope: 'Existing BE account DB and two CHAT instances sharing MySQL/Redis; each check records actual success' }, null, 2));
+        fs.writeFileSync(resultFile, JSON.stringify({
+            ...outcome, checks, actualBrowser: false,
+            configuredScope: 'Existing BE account DB and two CHAT instances sharing MySQL/Redis; each check records actual success'
+        }, null, 2));
         console.log('Local runtime checks: ' + checks.filter(item => item.passed).length + '/' + checks.length + '; ' + outcome.status);
     }
 })();
