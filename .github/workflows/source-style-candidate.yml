@@ -1,0 +1,20 @@
+name: Source style CHAT candidate verification
+on:
+  push:
+    branches: [ci/source-style-20261115]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: 4b2e8fcd88a1401c8e3287421488096bc87f1a33
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "4b2e8fcd88a1401c8e3287421488096bc87f1a33"
+      - name: Deployment contract tests (offline fixtures)
+        run: python3 -m unittest discover -s deploy/oci/tests -v
+      - name: Compile, isolated application tests, and build runtime
+        run: docker build --platform linux/amd64 --target runtime -f deploy/oci/Dockerfile -t local/verified:${GITHUB_SHA} .
