@@ -178,14 +178,18 @@ public sealed class ChatMembershipService(IChatMembershipStore store, IChatMembe
 
     private async Task<IReadOnlyList<long>> FenceAccountsAsync(long userId, long roomId, ChatMembershipTargets targets, CancellationToken token)
     {
-        if (!store.UsesAccountFencing) return [userId];
+        if (!store.UsesAccountFencing)
+            return [userId];
         // 사전 조회는 잠글 ID 집합만 만든다. 실제 방 권한/대상 검증은 기존 transaction 안에서 다시 한다.
         var ids = new HashSet<long>(await store.ReadAccountsForFenceAsync(roomId, token)) { userId };
-        foreach (var id in targets.TargetUserIds ?? []) if (id is > 0) ids.Add(id.Value);
+        foreach (var id in targets.TargetUserIds ?? [])
+        if (id is > 0)
+            ids.Add(id.Value);
         foreach (var value in targets.TargetPublicIds ?? [])
         {
             var publicId = NullableText(value);
-            if (publicId is not null && await Directory().FindByPublicIdAsync(publicId, token) is { } target) ids.Add(target.Id);
+            if (publicId is not null && await Directory().FindByPublicIdAsync(publicId, token) is { } target)
+                ids.Add(target.Id);
         }
         return ids.Order().ToArray();
     }

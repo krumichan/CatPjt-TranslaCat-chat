@@ -43,7 +43,8 @@ public sealed class ChatSafetyHttpTests
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Chat:Safety:Enabled"] = "true", ["Chat:Safety:AccountDeletionEnabled"] = "true"
+            ["Chat:Safety:Enabled"] = "true",
+            ["Chat:Safety:AccountDeletionEnabled"] = "true"
         }).Build();
         // 실행
         services.AddChatSafety(configuration);
@@ -66,8 +67,10 @@ public sealed class ChatSafetyHttpTests
         // 준비: 실제 Kestrel/운영 service middleware와 controller를 사용하고 저장소만 합성으로 격리한다.
         await using var host = await Host.StartAsync();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/chat/rooms/41/reports") { Content = Json(ReportBody) };
-        if (scenario != "no-user") request.Headers.Add("X-Safety-Test-User", "73");
-        if (scenario != "missing-service") request.Headers.Add(ChatServiceIngressGuard.HeaderName, "Bearer " + host.Token(
+        if (scenario != "no-user")
+            request.Headers.Add("X-Safety-Test-User", "73");
+        if (scenario != "missing-service")
+            request.Headers.Add(ChatServiceIngressGuard.HeaderName, "Bearer " + host.Token(
             "chat-ingress", scenario == "wrong-scope" ? "chat:realtime" : "chat:http", scenario == "wrong-user" ? 74 : 73));
 
         // 실행
@@ -134,7 +137,8 @@ public sealed class ChatSafetyHttpTests
         // 준비: 인증된 실제 사용자 계정이나 외부 서버는 사용하지 않는다.
         await using var host = await Host.StartAsync();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/internal/v1/chat/accounts/73/deletion") { Content = Json(DeleteBody) };
-        if (scenario != "missing") request.Headers.Authorization = new("Bearer", host.Token(
+        if (scenario != "missing")
+            request.Headers.Authorization = new("Bearer", host.Token(
             scenario == "normal-ingress" ? "chat-ingress" : "chat-account-delete",
             scenario == "normal-ingress" ? "chat:http" : "chat:account-delete",
             scenario == "wrong-target" ? 74 : 73, scenario == "wrong-environment" ? "Production" : "Testing"));
@@ -171,7 +175,12 @@ public sealed class ChatSafetyHttpTests
         public Store Store { get; } = store;
         public Deletion Deletion { get; } = deletion;
         public string Token(string use, string scope, long userId = 73, string environment = "Testing") => ChatServiceJwt.Issue(new()
-            { Issuer = "translacat-be", Audience = "translacat-chat", Service = "translacat-be", Base64SigningKey = Convert.ToBase64String(key) },
+        {
+            Issuer = "translacat-be",
+            Audience = "translacat-chat",
+            Service = "translacat-be",
+            Base64SigningKey = Convert.ToBase64String(key)
+        },
             environment, use, scope, userId, DateTimeOffset.UtcNow);
         public static async Task<Host> StartAsync(bool enabled = true)
         {
@@ -202,35 +211,63 @@ public sealed class ChatSafetyHttpTests
             var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
             return new(app, new HttpClient { BaseAddress = new Uri(address) }, key, store, deletion);
         }
-        public async ValueTask DisposeAsync() { Client.Dispose(); await application.StopAsync(); await application.DisposeAsync(); }
+        public async ValueTask DisposeAsync()
+        {
+            Client.Dispose();
+            await application.StopAsync();
+            await application.DisposeAsync();
+        }
     }
     private sealed class Store : IChatReportStore
     {
-        public int CreateCalls { get; private set; }
-        public int ListCalls { get; private set; }
-        public long Reporter { get; private set; }
+        public int CreateCalls
+        {
+            get; private set;
+        }
+        public int ListCalls
+        {
+            get; private set;
+        }
+        public long Reporter
+        {
+            get; private set;
+        }
         private static ChatReportReceipt Receipt => new(5, 41, "MESSAGE", "SPAM", "PENDING",
             DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified), DateTime.SpecifyKind(DateTime.UtcNow.AddDays(90), DateTimeKind.Unspecified));
         public Task<ChatReportReceipt> CreateAsync(long userId, long roomId, ChatReportCreateRequest request, DateTime now, CancellationToken token)
-        { CreateCalls++; Reporter = userId; return Task.FromResult(Receipt); }
+        {
+            CreateCalls++;
+            Reporter = userId;
+            return Task.FromResult(Receipt);
+        }
         public Task<ChatReportPage> ListAsync(string? status, long? cursor, int size, DateTime now, CancellationToken token)
-        { ListCalls++; return Task.FromResult(new ChatReportPage([Receipt], null, false)); }
+        {
+            ListCalls++;
+            return Task.FromResult(new ChatReportPage([Receipt], null, false));
+        }
         public Task<ChatReportDetail> GetAsync(long id, DateTime now, CancellationToken token) => Task.FromResult(new ChatReportDetail(Receipt, null, "합성 비공개", null, null, now));
         public Task<ChatReportDetail> UpdateAsync(long reviewer, long id, ChatReportStatusRequest request, DateTime now, CancellationToken token) => GetAsync(id, now, token);
         public Task PurgeExpiredEvidenceAsync(DateTime now, CancellationToken token) => Task.CompletedTask;
     }
     private sealed class Deletion : IChatAccountDeletionStore
     {
-        public int Calls { get; private set; }
+        public int Calls
+        {
+            get; private set;
+        }
         public Task<ChatAccountDeletionResult> DeleteAsync(long id, ChatAccountDeletionRequest request, CancellationToken token)
-        { Calls++; return Task.FromResult(new ChatAccountDeletionResult(request.OperationId!, id, "COMPLETED", DateTimeOffset.UtcNow)); }
+        {
+            Calls++;
+            return Task.FromResult(new ChatAccountDeletionResult(request.OperationId!, id, "COMPLETED", DateTimeOffset.UtcNow));
+        }
     }
     private sealed class TestAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            if (!Request.Headers.TryGetValue("X-Safety-Test-User", out var id)) return Task.FromResult(AuthenticateResult.NoResult());
+            if (!Request.Headers.TryGetValue("X-Safety-Test-User", out var id))
+                return Task.FromResult(AuthenticateResult.NoResult());
             var identity = new ClaimsIdentity([new(ClaimTypes.NameIdentifier, id.ToString()), new(ClaimTypes.Role, Request.Headers["X-Safety-Test-Role"].ToString())], "SafetyTest");
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), "SafetyTest")));
         }

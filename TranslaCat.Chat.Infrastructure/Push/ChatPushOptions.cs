@@ -2,10 +2,22 @@ namespace TranslaCat.Chat.Infrastructure.Push;
 
 public sealed class ChatPushOptions
 {
-    public bool Enabled { get; set; }
-    public string? AppEnvironment { get; set; }
-    public string? ProjectId { get; set; }
-    public string? ExpoAccessToken { get; set; }
+    public bool Enabled
+    {
+        get; set;
+    }
+    public string? AppEnvironment
+    {
+        get; set;
+    }
+    public string? ProjectId
+    {
+        get; set;
+    }
+    public string? ExpoAccessToken
+    {
+        get; set;
+    }
     public int RequestTimeoutSeconds { get; set; } = 10;
     public int MaxResponseBytes { get; set; } = 262144;
     public int SweepSeconds { get; set; } = 5;
@@ -17,7 +29,8 @@ public sealed class ChatPushOptions
 
     public void Validate()
     {
-        if (!Enabled) return;
+        if (!Enabled)
+            return;
 
         // 환경과 프로젝트는 운영자가 명시해야 한다. 비활성 기본값으로 외부 호출을 시작하지 않는다.
         if (AppEnvironment is not ("development" or "preview" or "production")

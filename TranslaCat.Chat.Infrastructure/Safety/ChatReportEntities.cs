@@ -6,37 +6,97 @@ namespace TranslaCat.Chat.Infrastructure.Safety;
 // 원문 증거는 일반 채팅 DTO와 분리한다. 만료 뒤 identity/본문/자유 서술을 지운다.
 public sealed class ChatReportEntity
 {
-    public long Id { get; set; }
-    public long RoomId { get; set; }
-    public long? ReporterUserId { get; set; }
+    public long Id
+    {
+        get; set;
+    }
+    public long RoomId
+    {
+        get; set;
+    }
+    public long? ReporterUserId
+    {
+        get; set;
+    }
     public string ClientRequestId { get; set; } = null!;
     public string RequestFingerprint { get; set; } = null!;
     public string TargetType { get; set; } = null!;
-    public long? MessageId { get; set; }
-    public long? TargetUserId { get; set; }
-    public long? TargetMemberId { get; set; }
+    public long? MessageId
+    {
+        get; set;
+    }
+    public long? TargetUserId
+    {
+        get; set;
+    }
+    public long? TargetMemberId
+    {
+        get; set;
+    }
     public string Reason { get; set; } = null!;
-    public string? Detail { get; set; }
-    public string? EvidenceContent { get; set; }
-    public string? EvidenceSenderDisplay { get; set; }
+    public string? Detail
+    {
+        get; set;
+    }
+    public string? EvidenceContent
+    {
+        get; set;
+    }
+    public string? EvidenceSenderDisplay
+    {
+        get; set;
+    }
     public string Status { get; set; } = "PENDING";
-    public string? ReviewNote { get; set; }
-    public int Version { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public DateTime UpdatedAt { get; set; }
-    public DateTime EvidenceExpiresAt { get; set; }
-    public DateTime? EvidencePurgedAt { get; set; }
+    public string? ReviewNote
+    {
+        get; set;
+    }
+    public int Version
+    {
+        get; set;
+    }
+    public DateTime CreatedAt
+    {
+        get; set;
+    }
+    public DateTime UpdatedAt
+    {
+        get; set;
+    }
+    public DateTime EvidenceExpiresAt
+    {
+        get; set;
+    }
+    public DateTime? EvidencePurgedAt
+    {
+        get; set;
+    }
 }
 
 public sealed class ChatReportReviewEntity
 {
-    public long Id { get; set; }
-    public long ReportId { get; set; }
-    public long? ReviewerUserId { get; set; }
+    public long Id
+    {
+        get; set;
+    }
+    public long ReportId
+    {
+        get; set;
+    }
+    public long? ReviewerUserId
+    {
+        get; set;
+    }
     public string PreviousStatus { get; set; } = null!;
     public string Status { get; set; } = null!;
-    public string? Note { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public string? Note
+    {
+        get; set;
+    }
+    public DateTime CreatedAt
+    {
+        get; set;
+    }
 }
 
 internal sealed class ChatReportConfiguration : IEntityTypeConfiguration<ChatReportEntity>

@@ -22,7 +22,10 @@ public sealed class NotificationPreferenceMigrationTests(ChatMySqlFixture fixtur
         Assert.Equal(Environment.GetEnvironmentVariable("CHAT_TEST_RUN_ID"), manifest["runId"]!.GetValue<string>());
         string catalog = "translacat_chat_test_" + Guid.NewGuid().ToString("N");
         manifest["catalogs"]!.AsArray().Add(catalog);
-        await File.WriteAllTextAsync(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
+        await File.WriteAllTextAsync(manifestPath, manifest.ToJsonString(new()
+        {
+            WriteIndented = true
+        }));
         await using var admin = new MySqlConnection(fixture.ConnectionString);
         await admin.OpenAsync();
         await using (var create = admin.CreateCommand())
@@ -41,9 +44,16 @@ public sealed class NotificationPreferenceMigrationTests(ChatMySqlFixture fixtur
             INSERT INTO chat_room_member (chat_room_id, user_id, role, show_original, show_translation, active, joined_at, created_at, updated_at)
             VALUES ({room.Id}, 300000001, 'MEMBER', b'1', b'1', b'1', {ChatMySqlFixture.Epoch}, {ChatMySqlFixture.Epoch}, {ChatMySqlFixture.Epoch})
             """);
-        var notification = new ChatNotificationEntity { RecipientUserId = 300000001, ActorUserId = 300000002,
-            ChatRoomId = room.Id, NotificationType = "CHAT_INVITATION", PayloadJson = "{}",
-            SourceEventKey = "synthetic-upgrade", CreatedAt = ChatMySqlFixture.Epoch };
+        var notification = new ChatNotificationEntity
+        {
+            RecipientUserId = 300000001,
+            ActorUserId = 300000002,
+            ChatRoomId = room.Id,
+            NotificationType = "CHAT_INVITATION",
+            PayloadJson = "{}",
+            SourceEventKey = "synthetic-upgrade",
+            CreatedAt = ChatMySqlFixture.Epoch
+        };
         db.ChatNotifications.Add(notification);
         await db.SaveChangesAsync();
         var before = (await db.Database.GetAppliedMigrationsAsync()).ToArray();

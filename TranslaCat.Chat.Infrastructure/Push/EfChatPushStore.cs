@@ -79,11 +79,13 @@ public sealed class EfChatPushStore(IDbContextFactory<ChatDbContext> contexts, C
     {
         await using var db = await contexts.CreateDbContextAsync(token);
         if (contentPolicy is not null && await db.ChatAccountDeletions.AnyAsync(row => row.UserId == job.SenderUserId
-            || row.UserId == job.RecipientUserId, token)) return false;
+            || row.UserId == job.RecipientUserId, token))
+            return false;
 
         // 전역 off와 다시 켜기 이전의 대기 알림을 차단한다. 읽음·멤버십 데이터는 바꾸지 않는다.
         if (await db.ChatNotificationPreferences.AnyAsync(row => row.UserId == job.RecipientUserId
-            && (!row.PushEnabled || (row.EnabledSinceUtc != null && row.EnabledSinceUtc > job.CreatedAtUtc)), token)) return false;
+            && (!row.PushEnabled || (row.EnabledSinceUtc != null && row.EnabledSinceUtc > job.CreatedAtUtc)), token))
+            return false;
 
         // 현재 읽음 cursor, 재가입 시각, 삭제/방 종료/OPEN ban을 실제 조회 규칙으로 다시 확인한다.
         return await (from message in db.ChatMessages
@@ -118,7 +120,8 @@ public sealed class EfChatPushStore(IDbContextFactory<ChatDbContext> contexts, C
             WHERE id = {job.Id} AND status = 'PENDING' AND lease_token = {job.LeaseToken}
               AND lease_expires_at_utc > UTC_TIMESTAMP(6)
             """, token);
-        if (changed == 0) return false;
+        if (changed == 0)
+            return false;
 
         db.ChatPushDeliveries.AddRange(targets.Select(target => new ChatPushDeliveryEntity
         {
@@ -163,7 +166,8 @@ public sealed class EfChatPushStore(IDbContextFactory<ChatDbContext> contexts, C
 
     public async Task<bool> RefreshTargetAsync(ChatPushDeliveryEntity job, ChatCorePushTarget target, CancellationToken token)
     {
-        if (!ChatPushProcessor.Matches(job, target)) return false;
+        if (!ChatPushProcessor.Matches(job, target))
+            return false;
         await using var db = await contexts.CreateDbContextAsync(token);
 
         // 같은 계정/sid binding과 tokenVersion의 resume generation만 전진시킨다.
@@ -176,7 +180,8 @@ public sealed class EfChatPushStore(IDbContextFactory<ChatDbContext> contexts, C
               AND account_binding_id = {target.AccountBindingId} AND token_version = {target.TokenVersion}
               AND generation <= {target.Generation}
             """, token);
-        if (changed == 0) return false;
+        if (changed == 0)
+            return false;
         job.Generation = target.Generation;
         return true;
     }

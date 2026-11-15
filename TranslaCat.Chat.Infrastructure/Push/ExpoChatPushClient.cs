@@ -79,7 +79,10 @@ public sealed class ExpoChatPushClient(HttpClient client, ChatPushOptions option
             return Task.FromResult(Failure("permanent"));
         }
 
-        string body = JsonSerializer.Serialize(new { ids = new[] { ticketId } }, JsonOptions);
+        string body = JsonSerializer.Serialize(new
+        {
+            ids = new[] { ticketId }
+        }, JsonOptions);
         return RequestAsync(ReceiptsUri, body, ticketId, cancellationToken);
     }
 

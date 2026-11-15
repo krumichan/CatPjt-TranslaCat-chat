@@ -27,8 +27,13 @@ public sealed class OpenInvitationController(OpenInvitationService service, Chat
         [FromBody] OpenInvitationCreate? request, CancellationToken token)
     {
         var result = await service.CreateAsync(UserId(), roomId, request ?? new(null, null), token);
-        return Ok(responses.Success(HttpContext, new { result.InvitationId, result.RoomId,
-            createdAt = timestamps.Format(result.CreatedAt), result.Duplicate }));
+        return Ok(responses.Success(HttpContext, new
+        {
+            result.InvitationId,
+            result.RoomId,
+            createdAt = timestamps.Format(result.CreatedAt),
+            result.Duplicate
+        }));
     }
 
     [HttpGet("api/v1/chat/open-invitations")]
@@ -42,8 +47,11 @@ public sealed class OpenInvitationController(OpenInvitationService service, Chat
     public async Task<IActionResult> Summary(CancellationToken token)
     {
         var result = await service.SummaryAsync(UserId(), token);
-        return Ok(responses.Success(HttpContext, new { result.UnreadCount,
-            latestInvitation = result.LatestInvitation is { } latest ? mapper.ToResponse(latest) : null }));
+        return Ok(responses.Success(HttpContext, new
+        {
+            result.UnreadCount,
+            latestInvitation = result.LatestInvitation is { } latest ? mapper.ToResponse(latest) : null
+        }));
     }
 
     [HttpGet("api/v1/chat/open-invitations/{invitationId}")]
@@ -63,7 +71,10 @@ public sealed class OpenInvitationController(OpenInvitationService service, Chat
 
 public sealed class OpenInvitationHttpBoundaryAttribute : ActionFilterAttribute, IExceptionFilter
 {
-    public OpenInvitationHttpBoundaryAttribute() { Order = -3200; }
+    public OpenInvitationHttpBoundaryAttribute()
+    {
+        Order = -3200;
+    }
     public override void OnActionExecuting(ActionExecutingContext context)
     {
         if (!context.ModelState.IsValid)
@@ -72,7 +83,8 @@ public sealed class OpenInvitationHttpBoundaryAttribute : ActionFilterAttribute,
 
     public void OnException(ExceptionContext context)
     {
-        if (context.Exception is OperationCanceledException && context.HttpContext.RequestAborted.IsCancellationRequested) return;
+        if (context.Exception is OperationCanceledException && context.HttpContext.RequestAborted.IsCancellationRequested)
+            return;
         var (status, code, message) = context.Exception switch
         {
             OpenInvitationException business => (400, business.Code, business.Message),
@@ -85,7 +97,10 @@ public sealed class OpenInvitationHttpBoundaryAttribute : ActionFilterAttribute,
     }
 
     private static ObjectResult Error(HttpContext context, int status, string code, string message) => new(
-        context.RequestServices.GetRequiredService<ChatReadHttpResponses>().Error(context, status, code, message)) { StatusCode = status };
+        context.RequestServices.GetRequiredService<ChatReadHttpResponses>().Error(context, status, code, message))
+    {
+        StatusCode = status
+    };
 }
 
 public static class OpenInvitationHttpExtensions

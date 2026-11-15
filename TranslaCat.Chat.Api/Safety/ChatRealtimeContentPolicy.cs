@@ -20,7 +20,8 @@ public sealed class ChatRealtimeContentPolicy(IDbContextFactory<ChatDbContext> c
             await using var profiles = await contexts.CreateDbContextAsync(token);
             long? account = await profiles.ChatRoomMembers.AsNoTracking().Where(row => row.Id == memberId && row.ChatRoomId == roomId)
                 .Select(row => (long?)row.UserId).SingleOrDefaultAsync(token);
-            if (account is null || await profiles.ChatAccountDeletions.AnyAsync(row => row.UserId == account, token)) return null;
+            if (account is null || await profiles.ChatAccountDeletions.AnyAsync(row => row.UserId == account, token))
+                return null;
             return json;
         }
         long? messageId = type switch
@@ -29,17 +30,21 @@ public sealed class ChatRealtimeContentPolicy(IDbContextFactory<ChatDbContext> c
             "chat.translation.completed" or "chat.translation.failed" => value["messageId"]?.GetValue<long>(),
             _ => null
         };
-        if (messageId is null) return json;
+        if (messageId is null)
+            return json;
 
         await using var db = await contexts.CreateDbContextAsync(token);
         var message = await db.ChatMessages.AsNoTracking().SingleOrDefaultAsync(row => row.Id == messageId
             && row.ChatRoomId == roomId && row.DeletedAt == null && row.Status == "SENT", token);
-        if (message is null) return null;
-        if (message.SenderType != "USER" || message.MessageType == "SYSTEM" || message.SenderUserId is not { } senderId) return json;
+        if (message is null)
+            return null;
+        if (message.SenderType != "USER" || message.MessageType == "SYSTEM" || message.SenderUserId is not { } senderId)
+            return json;
         var visibility = (await policy.ResolveAsync(userId, [senderId], token))[senderId];
 
         // 번역 이벤트는 별도 원문 우회 통로가 될 수 있으므로 차단 중에는 전송하지 않는다.
-        if (type != "chat.message.created") return visibility.Blocked ? null : json;
+        if (type != "chat.message.created")
+            return visibility.Blocked ? null : json;
         var dto = value["message"]!.AsObject();
         dto["contentVisibility"] = visibility.Blocked ? "BLOCKED" : "VISIBLE";
         dto["authorDeleted"] = visibility.AuthorDeleted;
@@ -68,14 +73,17 @@ public sealed class ChatRealtimeContentPolicy(IDbContextFactory<ChatDbContext> c
     public async Task<string?> PreparePrivateAsync(long userId, string json, CancellationToken token)
     {
         var value = JsonNode.Parse(json)?.AsObject() ?? throw new InvalidOperationException("Invalid CHAT private event.");
-        if (value["eventType"]?.GetValue<string>() != "chat.notification.created") return json;
+        if (value["eventType"]?.GetValue<string>() != "chat.notification.created")
+            return json;
         long? id = value["notification"]?["id"]?.GetValue<long>();
-        if (id is null) return null;
+        if (id is null)
+            return null;
         await using var db = await contexts.CreateDbContextAsync(token);
         var row = await db.ChatNotifications.AsNoTracking().Where(row => row.Id == id && row.RecipientUserId == userId)
             .Select(row => new { row.DeletedAt, row.ActorUserId }).SingleOrDefaultAsync(token);
         if (row is null || row.DeletedAt is not null || row.ActorUserId is { } actor
-            && await db.ChatAccountDeletions.AnyAsync(gone => gone.UserId == actor, token)) return null;
+            && await db.ChatAccountDeletions.AnyAsync(gone => gone.UserId == actor, token))
+            return null;
         return json;
     }
 }

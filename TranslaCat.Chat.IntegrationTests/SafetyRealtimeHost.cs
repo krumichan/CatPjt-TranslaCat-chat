@@ -36,7 +36,8 @@ internal sealed class SafetyRealtimeHost(WebApplication application, Uri address
         byte[] key = RandomNumberGenerator.GetBytes(32);
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Chat:Authentication:Enabled"] = "true", ["Chat:Authentication:Base64SigningKey"] = Convert.ToBase64String(key)
+            ["Chat:Authentication:Enabled"] = "true",
+            ["Chat:Authentication:Base64SigningKey"] = Convert.ToBase64String(key)
         });
         builder.Services.AddChatJwtAuthentication(builder.Configuration);
         builder.Services.AddChatRealtime();
@@ -59,8 +60,10 @@ internal sealed class SafetyRealtimeHost(WebApplication application, Uri address
         var client = new SafetySocket(socket);
         string token = new JsonWebTokenHandler { SetDefaultTimesOnTokenCreation = false }.CreateToken(JsonSerializer.Serialize(new
         {
-            sub = $"safety-{userId}@example.invalid", id = userId,
-            iat = DateTimeOffset.UtcNow.AddMinutes(-1).ToUnixTimeSeconds(), exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds()
+            sub = $"safety-{userId}@example.invalid",
+            id = userId,
+            iat = DateTimeOffset.UtcNow.AddMinutes(-1).ToUnixTimeSeconds(),
+            exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds()
         }), new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256));
         await client.SendAsync($"CONNECT\naccept-version:1.2\nAuthorization:Bearer {token}\n\n\0");
         Assert.StartsWith("CONNECTED\n", await client.ReceiveAsync());
@@ -69,7 +72,11 @@ internal sealed class SafetyRealtimeHost(WebApplication application, Uri address
         return client;
     }
 
-    public async ValueTask DisposeAsync() { await application.StopAsync(); await application.DisposeAsync(); }
+    public async ValueTask DisposeAsync()
+    {
+        await application.StopAsync();
+        await application.DisposeAsync();
+    }
 
     private sealed class SyntheticIdentity : IChatIdentityResolver
     {
@@ -114,5 +121,9 @@ internal sealed class SafetySocket(ClientWebSocket socket) : IDisposable
         Assert.Contains($"receipt-id:{id}\n", await ReceiveAsync());
     }
 
-    public void Dispose() { socket.Abort(); socket.Dispose(); }
+    public void Dispose()
+    {
+        socket.Abort();
+        socket.Dispose();
+    }
 }

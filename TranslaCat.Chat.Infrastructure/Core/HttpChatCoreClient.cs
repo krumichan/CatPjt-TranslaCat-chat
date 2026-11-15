@@ -30,7 +30,12 @@ public sealed class HttpChatCoreClient(HttpClient client, ChatCoreHttpSettings s
         }
 
         var result = await JsonAsync<ChatCorePushTargets>("/internal/v1/chat/push-targets/query", "chat:push-targets:read",
-            new { userIds, appEnvironment, projectId }, token);
+            new
+            {
+                userIds,
+                appEnvironment,
+                projectId
+            }, token);
         if (result.Targets is null || result.Targets.Count > userIds.Length * 10
             || result.Targets.Any(target => target is null || !userIds.Contains(target.UserId) || !ValidPushTarget(target))
             || result.Targets.Select(target => target.InstallationId).Distinct(StringComparer.Ordinal).Count() != result.Targets.Count)
@@ -53,7 +58,10 @@ public sealed class HttpChatCoreClient(HttpClient client, ChatCoreHttpSettings s
         using var request = Request(HttpMethod.Post, "/internal/v1/chat/push-installations/invalidate",
             "chat:push-installations:invalidate", JsonContent.Create(new
             {
-                installationId, accountBindingId, generation, tokenVersion
+                installationId,
+                accountBindingId,
+                generation,
+                tokenVersion
             }));
         await EmptyAsync(request, token);
     }

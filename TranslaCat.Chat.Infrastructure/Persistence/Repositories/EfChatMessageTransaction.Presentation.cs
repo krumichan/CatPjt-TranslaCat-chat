@@ -75,7 +75,11 @@ public sealed partial class EfChatMessageTransaction
                     if (member.RoomType == "OPEN" && message.SenderUserId is { } deletedId)
                     {
                         var previous = await ResolveOpenSenderAsync(member.ChatRoomId, deletedId, cancellationToken);
-                        openSender = previous is null ? null : previous with { Nickname = "탈퇴한 사용자", ProfileImageUrl = null };
+                        openSender = previous is null ? null : previous with
+                        {
+                            Nickname = "탈퇴한 사용자",
+                            ProfileImageUrl = null
+                        };
                     }
                 }
                 else if (message.SenderType == "AI")

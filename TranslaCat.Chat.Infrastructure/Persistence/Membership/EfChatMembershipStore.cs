@@ -112,7 +112,8 @@ public sealed class EfChatMembershipStore(
 
         public async Task<ChatMembershipRoom> CreateFriendDirectAsync(ChatMembershipUser owner, DateTime now, CancellationToken cancellationToken)
         {
-            if (fenced) ChatAccountWriteGate.RequireHeld(context, owner.Id);
+            if (fenced)
+                ChatAccountWriteGate.RequireHeld(context, owner.Id);
             var room = new ChatRoomEntity
             {
                 RoomType = "DIRECT",
@@ -130,7 +131,8 @@ public sealed class EfChatMembershipStore(
 
         public async Task<ChatMembershipRoom> CreateGroupAsync(string? name, string? description, ChatMembershipUser owner, string sourceType, DateTime now, CancellationToken cancellationToken)
         {
-            if (fenced) ChatAccountWriteGate.RequireHeld(context, owner.Id);
+            if (fenced)
+                ChatAccountWriteGate.RequireHeld(context, owner.Id);
             var room = new ChatRoomEntity
             {
                 RoomType = "GROUP",
@@ -151,7 +153,8 @@ public sealed class EfChatMembershipStore(
         public async Task<ChatMembershipMember> AddOrRestoreAsync(ChatMembershipRoom room, ChatMembershipUser user, string role,
             long? initialCursor, string auditIdentity, DateTime now, CancellationToken cancellationToken)
         {
-            if (fenced) ChatAccountWriteGate.RequireHeld(context, user.Id);
+            if (fenced)
+                ChatAccountWriteGate.RequireHeld(context, user.Id);
             var language = await context.UserChatLanguageSettings.Where(setting => setting.UserId == user.Id)
                 .Select(setting => new ChatLanguageValues(setting.OriginalLanguageCode, setting.TranslationLanguageCode,
                     setting.ShowOriginal, setting.ShowTranslation)).SingleOrDefaultAsync(cancellationToken) ?? ChatLanguageService.SystemDefault;

@@ -88,9 +88,11 @@ public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> c
 
         // 초대 수신함은 보존하고 전역 push 정책만 적용한다. 비참여자 초대에 방별 mute를 적용하지 않는다.
         if (contentPolicy is not null && await db.ChatAccountDeletions.AnyAsync(row => row.UserId == job.SenderUserId
-            || row.UserId == job.RecipientUserId, token)) return false;
+            || row.UserId == job.RecipientUserId, token))
+            return false;
         if (await db.ChatNotificationPreferences.AnyAsync(row => row.UserId == job.RecipientUserId
-            && (!row.PushEnabled || (row.EnabledSinceUtc != null && row.EnabledSinceUtc > job.CreatedAtUtc)), token)) return false;
+            && (!row.PushEnabled || (row.EnabledSinceUtc != null && row.EnabledSinceUtc > job.CreatedAtUtc)), token))
+            return false;
 
         // push identity를 원본 알림과 대조한다. 이미 확인한 초대나 지워진 알림은 다시 울리지 않는다.
         var notification = await db.ChatNotifications.AsNoTracking().SingleOrDefaultAsync(row =>
@@ -98,7 +100,8 @@ public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> c
             && row.ActorUserId == job.SenderUserId && row.ChatRoomId == job.RoomId
             && row.NotificationType == "CHAT_INVITATION" && !row.IsRead && row.ReadAt == null
             && row.DeletedAt == null, token);
-        if (notification is null || !HasOpenLinkPayload(notification.PayloadJson)) return false;
+        if (notification is null || !HasOpenLinkPayload(notification.PayloadJson))
+            return false;
 
         // OPEN 자체의 종료 상태와 현재 사람 멤버/ban을 조회한다. 재가입한 발신자의 예전 초대도 재사용하지 않는다.
         return await (from room in db.ChatRooms
@@ -117,15 +120,18 @@ public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> c
 
     private static bool HasOpenLinkPayload(string payload)
     {
-        if (string.IsNullOrEmpty(payload) || payload.Length > 16384) return false;
+        if (string.IsNullOrEmpty(payload) || payload.Length > 16384)
+            return false;
         try
         {
             using var json = System.Text.Json.JsonDocument.Parse(payload,
                 new System.Text.Json.JsonDocumentOptions { MaxDepth = 4 });
             var value = json.RootElement;
-            if (value.ValueKind != System.Text.Json.JsonValueKind.Object) return false;
+            if (value.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return false;
             var names = new HashSet<string>(StringComparer.Ordinal);
-            if (value.EnumerateObject().Any(property => !names.Add(property.Name))) return false;
+            if (value.EnumerateObject().Any(property => !names.Add(property.Name)))
+                return false;
             return value.TryGetProperty("schemaVersion", out var schema)
                 && schema.ValueKind == System.Text.Json.JsonValueKind.Number && schema.TryGetInt32(out int version) && version == 1
                 && value.TryGetProperty("invitationKind", out var kind) && kind.ValueKind == System.Text.Json.JsonValueKind.String
@@ -152,7 +158,8 @@ public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> c
             WHERE id = {job.Id} AND status = 'PENDING' AND lease_token = {job.LeaseToken}
               AND lease_expires_at_utc > UTC_TIMESTAMP(6)
             """, token);
-        if (changed == 0) return false;
+        if (changed == 0)
+            return false;
 
         db.OpenInvitationPushDeliveries.AddRange(targets.Select(target => new OpenInvitationPushDeliveryEntity
         {
@@ -197,7 +204,8 @@ public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> c
 
     public async Task<bool> RefreshTargetAsync(OpenInvitationPushDeliveryEntity job, ChatCorePushTarget target, CancellationToken token)
     {
-        if (!OpenInvitationPushProcessor.Matches(job, target)) return false;
+        if (!OpenInvitationPushProcessor.Matches(job, target))
+            return false;
         await using var db = await contexts.CreateDbContextAsync(token);
 
         // 같은 계정/sid binding과 tokenVersion의 resume generation만 전진시킨다.
@@ -210,7 +218,8 @@ public sealed class EfOpenInvitationPushStore(IDbContextFactory<ChatDbContext> c
               AND account_binding_id = {target.AccountBindingId} AND token_version = {target.TokenVersion}
               AND generation <= {target.Generation}
             """, token);
-        if (changed == 0) return false;
+        if (changed == 0)
+            return false;
         job.Generation = target.Generation;
         return true;
     }

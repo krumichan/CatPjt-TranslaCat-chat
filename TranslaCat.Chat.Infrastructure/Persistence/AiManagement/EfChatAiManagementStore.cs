@@ -141,7 +141,8 @@ public sealed partial class EfChatAiManagementStore(
     {
         await using var db = await contexts.CreateDbContextAsync(token);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
-        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(db, [userId], token);
+        if (policy is not null)
+            await ChatAccountWriteGate.AcquireAsync(db, [userId], token);
         var intents = new List<OpenMembershipIntent>();
         var result = await work(db, intents);
         await events.ValidateAvailabilityAsync(intents, token);

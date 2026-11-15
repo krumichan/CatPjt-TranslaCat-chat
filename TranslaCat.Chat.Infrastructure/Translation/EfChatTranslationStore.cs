@@ -109,7 +109,8 @@ public sealed class EfChatTranslationStore(
         await using var transaction = await context.Database.BeginTransactionAsync(
             IsolationLevel.RepeatableRead, cancellationToken);
 
-        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context, [userId], cancellationToken);
+        if (policy is not null)
+            await ChatAccountWriteGate.AcquireAsync(context, [userId], cancellationToken);
 
         // 동일/완료 상태여도 원본처럼 OPEN 접근, membership, 대상 메시지 검증을 먼저 수행한다.
         await ValidateAccessAsync(context, userId, roomId, cancellationToken);

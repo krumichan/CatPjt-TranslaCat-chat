@@ -41,9 +41,24 @@ public sealed class ChatMessageContractTests
     {
         // 준비: 원문/신원 제거 여부는 Application 정책이 결정하고 mapper는 그 표시를 보존한다.
         var mapper = new ChatMessageContractMapper(TimeZoneInfo.Utc);
-        var masked = SyntheticMessageTransaction.View() with { Content = "차단한 사용자의 메시지입니다.", ContentVisibility = "BLOCKED",
-            SenderUserId = null, SenderName = null, SenderEmail = null, SenderProfileImageUrl = null, Sender = null, Translations = [] };
-        var deleted = masked with { Content = "보존한 합성 원문", ContentVisibility = "VISIBLE", AuthorDeleted = true, SenderName = "탈퇴한 사용자" };
+        var masked = SyntheticMessageTransaction.View() with
+        {
+            Content = "차단한 사용자의 메시지입니다.",
+            ContentVisibility = "BLOCKED",
+            SenderUserId = null,
+            SenderName = null,
+            SenderEmail = null,
+            SenderProfileImageUrl = null,
+            Sender = null,
+            Translations = []
+        };
+        var deleted = masked with
+        {
+            Content = "보존한 합성 원문",
+            ContentVisibility = "VISIBLE",
+            AuthorDeleted = true,
+            SenderName = "탈퇴한 사용자"
+        };
 
         // 실행
         var blockedJson = JsonSerializer.SerializeToElement(mapper.ToResponse(masked));

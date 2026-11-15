@@ -92,7 +92,8 @@ public sealed class EfChatReadTransaction(
 
         public async Task<ChatReadMember?> FindActiveMemberForUpdateAsync(long chatRoomId, long loginUserId, CancellationToken cancellationToken)
         {
-            if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context, [loginUserId], cancellationToken);
+            if (policy is not null)
+                await ChatAccountWriteGate.AcquireAsync(context, [loginUserId], cancellationToken);
             // 최신 행을 lock read로 읽어 같은 membership의 cursor 갱신을 commit까지 직렬화한다.
             var members = await context.ChatRoomMembers.FromSqlInterpolated($"SELECT * FROM chat_room_member WHERE chat_room_id = {chatRoomId} AND user_id = {loginUserId} AND active = 1 AND deleted_at IS NULL FOR UPDATE")
                 .ToListAsync(cancellationToken);

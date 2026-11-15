@@ -45,7 +45,11 @@ public sealed class OpenInvitationHttpTests
 
         // 실행
         using var response = await host.SendAsync("POST", "/api/v1/chat/open-rooms/41/invitations",
-            JsonSerializer.Serialize(new { targetPublicId = "  TC-TARGET  ", requestId }));
+            JsonSerializer.Serialize(new
+            {
+                targetPublicId = "  TC-TARGET  ",
+                requestId
+            }));
         var json = await ReadHttpFixture.ReadJsonAsync(response);
         var body = json.GetProperty("body");
 
@@ -146,32 +150,88 @@ internal sealed class InvitationHost(WebApplication application, HttpClient clie
     public async Task<HttpResponseMessage> SendAsync(string method, string path, string? body = null, bool authenticated = true)
     {
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-        if (authenticated) request.Headers.Add(TestReadAuthenticationHandler.HeaderName, "73");
+        if (body is not null)
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        if (authenticated)
+            request.Headers.Add(TestReadAuthenticationHandler.HeaderName, "73");
         return await client.SendAsync(request);
     }
-    public async ValueTask DisposeAsync() { client.Dispose(); await application.StopAsync(); await application.DisposeAsync(); }
+    public async ValueTask DisposeAsync()
+    {
+        client.Dispose();
+        await application.StopAsync();
+        await application.DisposeAsync();
+    }
 }
 
 internal sealed class InvitationMemoryStore : IOpenInvitationStore
 {
-    public int Calls { get; private set; }
-    public long Actor { get; private set; }
-    public long Room { get; private set; }
-    public int Limit { get; private set; }
-    public long? Cursor { get; private set; }
-    public bool Missing { get; set; }
-    public OpenInvitationValidatedCreate? Request { get; private set; }
+    public int Calls
+    {
+        get; private set;
+    }
+    public long Actor
+    {
+        get; private set;
+    }
+    public long Room
+    {
+        get; private set;
+    }
+    public int Limit
+    {
+        get; private set;
+    }
+    public long? Cursor
+    {
+        get; private set;
+    }
+    public bool Missing
+    {
+        get; set;
+    }
+    public OpenInvitationValidatedCreate? Request
+    {
+        get; private set;
+    }
     private static ChatNotificationActivity Item => new(101, "CHAT_INVITATION", 41,
         "{\"schemaVersion\":1,\"invitationKind\":\"OPEN_LINK\",\"roomType\":\"OPEN\",\"roomName\":null,\"inviterOpenNickname\":\"방의 이름\",\"inviterMemberCode\":\"OC-TEST\"}", false, null, new(2026, 1, 1));
     public Task<OpenInvitationCreated> CreateAsync(long userId, long roomId, OpenInvitationValidatedCreate request, CancellationToken token)
-    { Calls++; Actor = userId; Room = roomId; Request = request; return Task.FromResult(new OpenInvitationCreated(101, roomId, Item.CreatedAt, false)); }
+    {
+        Calls++;
+        Actor = userId;
+        Room = roomId;
+        Request = request;
+        return Task.FromResult(new OpenInvitationCreated(101, roomId, Item.CreatedAt, false));
+    }
     public Task<IReadOnlyList<ChatNotificationActivity>> ListAsync(long userId, long? cursorId, int limit, CancellationToken token)
-    { Calls++; Actor = userId; Limit = limit; Cursor = cursorId; return Task.FromResult<IReadOnlyList<ChatNotificationActivity>>([Item]); }
+    {
+        Calls++;
+        Actor = userId;
+        Limit = limit;
+        Cursor = cursorId;
+        return Task.FromResult<IReadOnlyList<ChatNotificationActivity>>([Item]);
+    }
     public Task<OpenInvitationSummary> SummaryAsync(long userId, CancellationToken token)
-    { Calls++; Actor = userId; return Task.FromResult(new OpenInvitationSummary(1, Item)); }
+    {
+        Calls++;
+        Actor = userId;
+        return Task.FromResult(new OpenInvitationSummary(1, Item));
+    }
     public Task<ChatNotificationActivity?> GetAsync(long userId, long invitationId, CancellationToken token)
-    { Calls++; Actor = userId; return Task.FromResult(Missing ? null : (ChatNotificationActivity?)Item); }
+    {
+        Calls++;
+        Actor = userId;
+        return Task.FromResult(Missing ? null : (ChatNotificationActivity?)Item);
+    }
     public Task<ChatNotificationActivity?> ReadAsync(long userId, long invitationId, DateTime now, CancellationToken token)
-    { Calls++; Actor = userId; return Task.FromResult(Missing ? null : (ChatNotificationActivity?)(Item with { IsRead = true, ReadAt = now })); }
+    {
+        Calls++;
+        Actor = userId;
+        return Task.FromResult(Missing ? null : (ChatNotificationActivity?)(Item with
+        {
+            IsRead = true,
+            ReadAt = now
+        }));
+    }
 }

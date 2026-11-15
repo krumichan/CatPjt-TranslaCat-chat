@@ -27,8 +27,14 @@ public sealed class ChatRoomMemberEntity
     public bool ShowOriginal { get; set; } = true;
     public bool ShowTranslation { get; set; } = true;
     public bool Active { get; set; } = true;
-    public bool NotificationMuted { get; set; }
-    public DateTime? NotificationEnabledSinceUtc { get; set; }
+    public bool NotificationMuted
+    {
+        get; set;
+    }
+    public DateTime? NotificationEnabledSinceUtc
+    {
+        get; set;
+    }
     public DateTime JoinedAt
     {
         get; set;

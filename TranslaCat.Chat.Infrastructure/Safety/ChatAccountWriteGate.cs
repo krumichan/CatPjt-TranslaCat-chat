@@ -5,7 +5,13 @@ using TranslaCat.Chat.Infrastructure.Persistence;
 
 namespace TranslaCat.Chat.Infrastructure.Safety;
 
-public sealed class ChatAccountWriteGateEntity { public long UserId { get; set; } }
+public sealed class ChatAccountWriteGateEntity
+{
+    public long UserId
+    {
+        get; set;
+    }
+}
 internal sealed class ChatAccountWriteGateConfiguration : IEntityTypeConfiguration<ChatAccountWriteGateEntity>
 {
     public void Configure(EntityTypeBuilder<ChatAccountWriteGateEntity> builder)
@@ -20,7 +26,8 @@ public static class ChatAccountWriteGate
 {
     public static async Task AcquireAsync(ChatDbContext db, IEnumerable<long> accounts, CancellationToken token, bool deletion = false)
     {
-        if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("CHAT account gate requires an explicit transaction.");
+        if (db.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("CHAT account gate requires an explicit transaction.");
         if (db.SafetyGateTransactionId != db.Database.CurrentTransaction.TransactionId)
         {
             // pooled DbContext의 사용자 필드는 자동 초기화되지 않는다. 잠금 증명은 현재 transaction에만 유효하다.
@@ -28,7 +35,8 @@ public static class ChatAccountWriteGate
             db.SafetyGateTransactionId = db.Database.CurrentTransaction.TransactionId;
         }
         long[] ids = accounts.Where(id => id > 0).Distinct().Order().ToArray();
-        if (ids.Length > 2000) throw new ChatSafetyException("CHAT_SAFETY_INVALID", "대상 계정 수를 확인해 주세요.");
+        if (ids.Length > 2000)
+            throw new ChatSafetyException("CHAT_SAFETY_INVALID", "대상 계정 수를 확인해 주세요.");
 
         // 계정 gate는 항상 오름차순으로, OPEN/room/member 잠금 전에 획득한다. DB transaction 종료까지 유지된다.
         foreach (long id in ids)
@@ -39,7 +47,8 @@ public static class ChatAccountWriteGate
             _ = await db.ChatAccountWriteGates.FromSqlInterpolated($"SELECT * FROM chat_account_write_gate WHERE user_id={id} FOR UPDATE").SingleAsync(token);
             db.LockedSafetyAccounts.Add(id);
         }
-        if (deletion) return;
+        if (deletion)
+            return;
 
         // snapshot이 아닌 locking current read다. gate 대기 중 commit된 탈퇴도 새 쓰기 전에 거절한다.
         foreach (long id in ids)

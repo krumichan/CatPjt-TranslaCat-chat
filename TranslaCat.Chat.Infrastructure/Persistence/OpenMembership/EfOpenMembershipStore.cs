@@ -152,7 +152,8 @@ public sealed partial class EfOpenMembershipStore(
         long[] ids = policy is null ? [] : await db.ChatRoomMembers.AsNoTracking()
             .Where(row => row.ChatRoomId == roomId && row.Active && row.DeletedAt == null).Select(row => row.UserId).ToArrayAsync(token);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
-        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(db, ids.Append(userId), token);
+        if (policy is not null)
+            await ChatAccountWriteGate.AcquireAsync(db, ids.Append(userId), token);
         var locked = roomId <= 0 ? [] : await db.OpenChatRooms
             .FromSqlInterpolated($"SELECT * FROM open_chat_room WHERE chat_room_id = {roomId} FOR UPDATE").ToListAsync(token);
         var open = locked.SingleOrDefault() ?? throw Error("OPEN 채팅방을 찾을 수 없습니다.", "ROOM_NOT_FOUND");

@@ -18,7 +18,10 @@ public sealed class ChatSafetyPolicyTests
     public void Recognized_reasons_accept_one_message_target(string reason)
     {
         // 준비
-        var request = Message() with { Reason = reason };
+        var request = Message() with
+        {
+            Reason = reason
+        };
         // 실행 / 검증
         ChatReportPolicy.ValidateCreate(7, 41, request);
     }

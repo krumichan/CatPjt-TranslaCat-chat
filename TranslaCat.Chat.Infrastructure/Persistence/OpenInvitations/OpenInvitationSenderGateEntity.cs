@@ -6,8 +6,14 @@ namespace TranslaCat.Chat.Infrastructure.Persistence.OpenInvitations;
 // CHAT에 공통 사용자 row가 없으므로 초대의 발신자별 동시성만 이 row로 직렬화한다.
 public sealed class OpenInvitationSenderGateEntity
 {
-    public long ActorUserId { get; set; }
-    public DateTime TouchedAtUtc { get; set; }
+    public long ActorUserId
+    {
+        get; set;
+    }
+    public DateTime TouchedAtUtc
+    {
+        get; set;
+    }
 }
 
 internal sealed class OpenInvitationSenderGateConfiguration : IEntityTypeConfiguration<OpenInvitationSenderGateEntity>

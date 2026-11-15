@@ -68,10 +68,17 @@ public sealed class ChatPushProcessorTests
         using var fixture = new Fixture(store);
         store.OnExpanded = () =>
         {
-            if (scenario == "read") store.Eligible = false;
-            if (scenario == "blocked") fixture.Blocked = true;
-            if (scenario == "refreshed-token") fixture.CurrentTarget = Target() with { TokenVersion = 2 };
-            if (scenario == "lost-lease") store.OwnsLease = false;
+            if (scenario == "read")
+                store.Eligible = false;
+            if (scenario == "blocked")
+                fixture.Blocked = true;
+            if (scenario == "refreshed-token")
+                fixture.CurrentTarget = Target() with
+                {
+                    TokenVersion = 2
+                };
+            if (scenario == "lost-lease")
+                store.OwnsLease = false;
         };
 
         // 실행
@@ -186,14 +193,29 @@ public sealed class ChatPushProcessorTests
         private readonly HttpClient coreHttp;
         private readonly HttpClient expoHttp;
         public ChatCorePushTarget CurrentTarget { get; set; } = Target();
-        public bool Blocked { get; set; }
-        public string? ReceiptError { get; init; }
+        public bool Blocked
+        {
+            get; set;
+        }
+        public string? ReceiptError
+        {
+            get; init;
+        }
         public HttpStatusCode SendStatus { get; init; } = HttpStatusCode.OK;
-        public int SendCount { get; private set; }
+        public int SendCount
+        {
+            get; private set;
+        }
         public List<string> Payloads { get; } = [];
-        public int ReceiptCount { get; private set; }
+        public int ReceiptCount
+        {
+            get; private set;
+        }
         public List<string> Invalidations { get; } = [];
-        public ChatPushProcessor Processor { get; }
+        public ChatPushProcessor Processor
+        {
+            get;
+        }
 
         public Fixture(MemoryStore store, BadgeSummaryStore? summaries = null)
         {
@@ -217,54 +239,133 @@ public sealed class ChatPushProcessorTests
                 {
                     SendCount++;
                     Payloads.Add(await request.Content!.ReadAsStringAsync());
-                    return SendStatus == HttpStatusCode.OK ? Json(new { data = new[] { new { status = "ok", id = "synthetic-ticket" } } }) : new HttpResponseMessage(SendStatus);
+                    return SendStatus == HttpStatusCode.OK ? Json(new
+                    {
+                        data = new[] { new { status = "ok", id = "synthetic-ticket" } }
+                    }) : new HttpResponseMessage(SendStatus);
                 }
                 ReceiptCount++;
-                object receipt = ReceiptError is null ? new { status = "ok" } : new { status = "error", details = new { error = ReceiptError } };
-                return Json(new { data = new Dictionary<string, object> { ["synthetic-ticket"] = receipt } });
+                object receipt = ReceiptError is null ? new
+                {
+                    status = "ok"
+                } : new
+                {
+                    status = "error",
+                    details = new
+                    {
+                        error = ReceiptError
+                    }
+                };
+                return Json(new
+                {
+                    data = new Dictionary<string, object> { ["synthetic-ticket"] = receipt }
+                });
             }));
             Processor = new(store, new(coreHttp, new(new Uri("https://synthetic.invalid"), TimeSpan.FromSeconds(1)), new Tokens()), new(expoHttp, options), options, summaries);
         }
-        public void Dispose() { coreHttp.Dispose(); expoHttp.Dispose(); }
+        public void Dispose()
+        {
+            coreHttp.Dispose();
+            expoHttp.Dispose();
+        }
     }
 
     private sealed class MemoryStore : IChatPushStore
     {
         private readonly ChatPushOutboxEntity outbox = new()
-        { Id = 1, MessageId = 7, RoomId = 3, SenderUserId = 11, RecipientUserId = 22, EventId = "synthetic-event", LeaseToken = "outbox-lease" };
-        public ChatPushDeliveryEntity? Delivery { get; private set; }
+        {
+            Id = 1,
+            MessageId = 7,
+            RoomId = 3,
+            SenderUserId = 11,
+            RecipientUserId = 22,
+            EventId = "synthetic-event",
+            LeaseToken = "outbox-lease"
+        };
+        public ChatPushDeliveryEntity? Delivery
+        {
+            get; private set;
+        }
         public bool Eligible { get; set; } = true;
         public bool OwnsLease { get; set; } = true;
-        public int ExpansionCount { get; private set; }
-        public int LastDelay { get; private set; }
-        public Action? OnExpanded { get; set; }
+        public int ExpansionCount
+        {
+            get; private set;
+        }
+        public int LastDelay
+        {
+            get; private set;
+        }
+        public Action? OnExpanded
+        {
+            get; set;
+        }
         public Task<IReadOnlyList<long>> CandidatesAsync(bool deliveries, CancellationToken token) => Task.FromResult<IReadOnlyList<long>>(
             deliveries ? Delivery?.Status is "SEND" or "RECEIPT" or "INVALIDATE" ? [1L] : [] : outbox.Status == "PENDING" ? [1L] : []);
-        public Task<ChatPushOutboxEntity?> ClaimOutboxAsync(long id, CancellationToken token) { outbox.Attempts++; return Task.FromResult<ChatPushOutboxEntity?>(outbox); }
-        public Task<ChatPushDeliveryEntity?> ClaimDeliveryAsync(long id, CancellationToken token) { Delivery!.Attempts++; return Task.FromResult<ChatPushDeliveryEntity?>(Delivery); }
+        public Task<ChatPushOutboxEntity?> ClaimOutboxAsync(long id, CancellationToken token)
+        {
+            outbox.Attempts++;
+            return Task.FromResult<ChatPushOutboxEntity?>(outbox);
+        }
+        public Task<ChatPushDeliveryEntity?> ClaimDeliveryAsync(long id, CancellationToken token)
+        {
+            Delivery!.Attempts++;
+            return Task.FromResult<ChatPushDeliveryEntity?>(Delivery);
+        }
         public Task<ChatPushOutboxEntity> OutboxAsync(long id, CancellationToken token) => Task.FromResult(outbox);
         public Task<bool> EligibleAsync(ChatPushOutboxEntity job, CancellationToken token) => Task.FromResult(Eligible);
         public Task<bool> RefreshTargetAsync(ChatPushDeliveryEntity job, ChatCorePushTarget target, CancellationToken token)
-        { if (!OwnsLease || !ChatPushProcessor.Matches(job, target)) return Task.FromResult(false); job.Generation = target.Generation; return Task.FromResult(true); }
+        {
+            if (!OwnsLease || !ChatPushProcessor.Matches(job, target))
+                return Task.FromResult(false);
+            job.Generation = target.Generation;
+            return Task.FromResult(true);
+        }
         public Task<bool> OwnsDeliveryAsync(ChatPushDeliveryEntity job, CancellationToken token) => Task.FromResult(OwnsLease);
         public Task<bool> ExpandAsync(ChatPushOutboxEntity job, IReadOnlyList<ChatCorePushTarget> targets, CancellationToken token)
         {
             ExpansionCount++;
             outbox.Status = "EXPANDED";
             var target = Assert.Single(targets);
-            Delivery = new() { Id = 1, OutboxId = 1, InstallationId = target.InstallationId, AccountBindingId = target.AccountBindingId,
-                Generation = target.Generation, TokenVersion = target.TokenVersion, LeaseToken = "delivery-lease" };
+            Delivery = new()
+            {
+                Id = 1,
+                OutboxId = 1,
+                InstallationId = target.InstallationId,
+                AccountBindingId = target.AccountBindingId,
+                Generation = target.Generation,
+                TokenVersion = target.TokenVersion,
+                LeaseToken = "delivery-lease"
+            };
             OnExpanded?.Invoke();
             return Task.FromResult(true);
         }
         public Task<bool> FinishOutboxAsync(ChatPushOutboxEntity job, string status, int delaySeconds, CancellationToken token)
-        { outbox.Status = status; LastDelay = delaySeconds; return Task.FromResult(true); }
+        {
+            outbox.Status = status;
+            LastDelay = delaySeconds;
+            return Task.FromResult(true);
+        }
         public Task<bool> FinishDeliveryAsync(ChatPushDeliveryEntity job, string status, int delaySeconds, string? ticketId, bool resetAttempts, CancellationToken token)
-        { job.Status = status; job.TicketId = ticketId; if (resetAttempts) job.Attempts = 0; LastDelay = delaySeconds; return Task.FromResult(true); }
+        {
+            job.Status = status;
+            job.TicketId = ticketId;
+            if (resetAttempts)
+                job.Attempts = 0;
+            LastDelay = delaySeconds;
+            return Task.FromResult(true);
+        }
     }
     private static HttpResponseMessage Json(object value) => new(HttpStatusCode.OK)
-    { Content = new StringContent(JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web)), Encoding.UTF8, "application/json") };
-    private sealed class Tokens : IChatCoreAccessTokenProvider { public string CreateToken(string scope) => "synthetic-service-token"; }
+    {
+        Content = new StringContent(JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web)), Encoding.UTF8, "application/json")
+    };
+    private sealed class Tokens : IChatCoreAccessTokenProvider
+    {
+        public string CreateToken(string scope) => "synthetic-service-token";
+    }
     private sealed class Handler(Func<HttpRequestMessage, Task<HttpResponseMessage>> response) : HttpMessageHandler
-    { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) => response(request); }
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) => response(request);
+    }
 }

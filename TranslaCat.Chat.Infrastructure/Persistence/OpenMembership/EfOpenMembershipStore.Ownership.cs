@@ -28,7 +28,8 @@ public sealed partial class EfOpenMembershipStore
                 throw Error(target is null ? "OWNER 위임 대상 멤버를 찾을 수 없습니다." : "자기 자신에게 OWNER를 위임할 수 없습니다.", "OWNER_TRANSFER_TARGET_INVALID");
             }
 
-            if (policy is not null) ChatAccountWriteGate.RequireHeld(db, target.UserId);
+            if (policy is not null)
+                ChatAccountWriteGate.RequireHeld(db, target.UserId);
             var audit = await AuditAsync(userId, token);
             var room = await db.ChatRooms.SingleAsync(row => row.Id == roomId, token);
             current.Role = "MEMBER";

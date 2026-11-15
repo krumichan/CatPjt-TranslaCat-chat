@@ -6,15 +6,36 @@ namespace TranslaCat.Chat.Infrastructure.Safety;
 // 외부 PUT와 CHAT transaction 사이에 생길 수 있는 미확정 객체를 추적한다. 계정/멤버 FK는 의도적으로 없다.
 public sealed class ChatOpenProfileUploadIntentEntity
 {
-    public long Id { get; set; }
-    public long UserId { get; set; }
-    public long MemberId { get; set; }
+    public long Id
+    {
+        get; set;
+    }
+    public long UserId
+    {
+        get; set;
+    }
+    public long MemberId
+    {
+        get; set;
+    }
     public string ObjectKey { get; set; } = null!;
     public string State { get; set; } = "PUT_STARTED";
-    public DateTime CreatedAtUtc { get; set; }
-    public DateTime? PutConfirmedAtUtc { get; set; }
-    public DateTime? NextAttemptAtUtc { get; set; }
-    public int Attempts { get; set; }
+    public DateTime CreatedAtUtc
+    {
+        get; set;
+    }
+    public DateTime? PutConfirmedAtUtc
+    {
+        get; set;
+    }
+    public DateTime? NextAttemptAtUtc
+    {
+        get; set;
+    }
+    public int Attempts
+    {
+        get; set;
+    }
 }
 
 internal sealed class ChatOpenProfileUploadIntentConfiguration : IEntityTypeConfiguration<ChatOpenProfileUploadIntentEntity>

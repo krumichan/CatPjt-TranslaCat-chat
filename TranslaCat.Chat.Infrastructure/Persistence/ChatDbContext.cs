@@ -36,7 +36,10 @@ public sealed class ChatDbContext(DbContextOptions<ChatDbContext> options) : DbC
     public DbSet<ChatAccountWriteGateEntity> ChatAccountWriteGates => Set<ChatAccountWriteGateEntity>();
     public DbSet<ChatOpenProfileUploadIntentEntity> ChatOpenProfileUploadIntents => Set<ChatOpenProfileUploadIntentEntity>();
     internal HashSet<long> LockedSafetyAccounts { get; } = [];
-    internal Guid? SafetyGateTransactionId { get; set; }
+    internal Guid? SafetyGateTransactionId
+    {
+        get; set;
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

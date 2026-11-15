@@ -152,7 +152,8 @@ public sealed partial class SafetyPersistenceTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Chat:SourceTimeZone"] = "UTC", ["Chat:Safety:Enabled"] = enabled.ToString(),
+            ["Chat:SourceTimeZone"] = "UTC",
+            ["Chat:Safety:Enabled"] = enabled.ToString(),
             ["Chat:Safety:AccountDeletionEnabled"] = enabled.ToString()
         }).Build();
         var services = new ServiceCollection();

@@ -13,13 +13,15 @@ public sealed class ChatPushProcessor(IChatPushStore store, HttpChatCoreClient c
         foreach (long id in await store.CandidatesAsync(false, token))
         {
             var job = await store.ClaimOutboxAsync(id, token);
-            if (job is not null) await ExpandAsync(job, token);
+            if (job is not null)
+                await ExpandAsync(job, token);
         }
 
         foreach (long id in await store.CandidatesAsync(true, token))
         {
             var job = await store.ClaimDeliveryAsync(id, token);
-            if (job is not null) await DeliverAsync(job, token);
+            if (job is not null)
+                await DeliverAsync(job, token);
         }
     }
 
@@ -62,7 +64,8 @@ public sealed class ChatPushProcessor(IChatPushStore store, HttpChatCoreClient c
             // DeviceNotRegistered는 먼저 영속 상태로 남긴 뒤 별도 재시도한다. 갱신된 설치는 BE의 네 값 비교가 보호한다.
             if (job.Status == "INVALIDATE")
             {
-                if (!await store.OwnsDeliveryAsync(job, token)) return;
+                if (!await store.OwnsDeliveryAsync(job, token))
+                    return;
                 await core.InvalidatePushAsync(job.InstallationId, job.AccountBindingId, job.Generation, job.TokenVersion, token);
                 await store.FinishDeliveryAsync(job, "INVALIDATED", 0, null, false, token);
                 return;
@@ -93,8 +96,12 @@ public sealed class ChatPushProcessor(IChatPushStore store, HttpChatCoreClient c
             }
 
             // 마지막 정책 조회 뒤 lease 소유권을 재확인한다. 이미 provider에 넘긴 알림은 회수할 수 없다.
-            if (!await store.RefreshTargetAsync(job, target, token) || !await store.OwnsDeliveryAsync(job, token)) return;
-            var payload = Payload(outbox, target) with { Badge = badge };
+            if (!await store.RefreshTargetAsync(job, target, token) || !await store.OwnsDeliveryAsync(job, token))
+                return;
+            var payload = Payload(outbox, target) with
+            {
+                Badge = badge
+            };
             var result = await expo.SendAsync(payload, token);
             await ApplyResultAsync(job, result, false, token);
         }
@@ -106,13 +113,15 @@ public sealed class ChatPushProcessor(IChatPushStore store, HttpChatCoreClient c
 
     private async Task<bool> EligibleAsync(ChatPushOutboxEntity job, CancellationToken token)
     {
-        if (!await store.EligibleAsync(job, token)) return false;
+        if (!await store.EligibleAsync(job, token))
+            return false;
 
         // 양방향 block은 BE의 기존 관계 판정에 맡긴다. 누락 응답은 허용으로 해석하지 않는다.
         var relations = await core.RelationsAsync(job.RecipientUserId, [job.SenderUserId], token);
         if (relations.Relations is null || relations.Relations.Count != 1 || relations.MissingUserIds is null
             || relations.MissingUserIds.Count != 0 || relations.Relations[0] is null
-            || relations.Relations[0].TargetUserId != job.SenderUserId) throw new ChatCoreUnavailableException();
+            || relations.Relations[0].TargetUserId != job.SenderUserId)
+            throw new ChatCoreUnavailableException();
         var relation = relations.Relations[0];
         return !relation.Blocked;
     }

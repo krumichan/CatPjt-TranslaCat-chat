@@ -53,7 +53,8 @@ public sealed class ChatRealtimeBroker(IServiceScopeFactory scopeFactory)
                         await using var scope = scopeFactory.CreateAsyncScope();
                         var access = scope.ServiceProvider.GetRequiredService<IChatRealtimeAccess>();
                         var content = scope.ServiceProvider.GetService<ChatRealtimeContentPolicy>();
-                        if (content is not null) await content.RequireActiveAsync(connection.UserId, sendToken);
+                        if (content is not null)
+                            await content.RequireActiveAsync(connection.UserId, sendToken);
                         if (closureOnly)
                         {
                             await access.ValidateRoomClosureDeliveryAsync(connection.UserId, roomId, sendToken);
@@ -98,7 +99,8 @@ public sealed class ChatRealtimeBroker(IServiceScopeFactory scopeFactory)
                 {
                     await using var scope = scopeFactory.CreateAsyncScope();
                     var content = scope.ServiceProvider.GetService<ChatRealtimeContentPolicy>();
-                    if (content is null) return json;
+                    if (content is null)
+                        return json;
                     try
                     {
                         await content.RequireActiveAsync(connection.UserId, sendToken);
@@ -189,8 +191,10 @@ internal sealed class ChatRealtimeConnection(WebSocket socket, long userId, stri
                 return;
             }
             string? body = await prepare(timeout.Token);
-            if (body is null) return;
-            if (command == "MESSAGE" && Volatile.Read(ref closing) != 0) return;
+            if (body is null)
+                return;
+            if (command == "MESSAGE" && Volatile.Read(ref closing) != 0)
+                return;
             var bytes = ChatStompEncoder.Encode(command, headers, body);
             await Socket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
         }

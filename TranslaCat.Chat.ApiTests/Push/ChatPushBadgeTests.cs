@@ -46,8 +46,14 @@ public sealed class ChatPushBadgeTests
         // 실행 / 검증
         using var without = JsonDocument.Parse(ExpoChatPushClient.SerializePayload(message));
         Assert.False(without.RootElement.TryGetProperty("badge", out _));
-        using var v1 = JsonDocument.Parse(ExpoChatPushClient.SerializePayload(message with { Badge = 5 }));
-        using var v2 = JsonDocument.Parse(ExpoChatPushClient.SerializePayload(invitation with { Badge = 0 }));
+        using var v1 = JsonDocument.Parse(ExpoChatPushClient.SerializePayload(message with
+        {
+            Badge = 5
+        }));
+        using var v2 = JsonDocument.Parse(ExpoChatPushClient.SerializePayload(invitation with
+        {
+            Badge = 0
+        }));
         Assert.Equal(5, v1.RootElement.GetProperty("badge").GetInt32());
         Assert.Equal(0, v2.RootElement.GetProperty("badge").GetInt32());
         Assert.False(v2.RootElement.GetProperty("data").TryGetProperty("badge", out _));
@@ -56,14 +62,29 @@ public sealed class ChatPushBadgeTests
 
 internal sealed class BadgeSummaryStore : IChatNotificationStore
 {
-    public int Calls { get; private set; }
-    public long UserId { get; private set; }
-    public Action? OnRead { get; set; }
-    public Exception? Error { get; set; }
+    public int Calls
+    {
+        get; private set;
+    }
+    public long UserId
+    {
+        get; private set;
+    }
+    public Action? OnRead
+    {
+        get; set;
+    }
+    public Exception? Error
+    {
+        get; set;
+    }
     public Task<ChatNotificationSummary> GetSummaryAsync(long userId, CancellationToken token)
     {
-        Calls++; UserId = userId; OnRead?.Invoke();
-        if (Error is not null) throw Error;
+        Calls++;
+        UserId = userId;
+        OnRead?.Invoke();
+        if (Error is not null)
+            throw Error;
         return Task.FromResult(new ChatNotificationSummary(2, 1, 3));
     }
     public Task<IReadOnlyList<ChatNotificationActivity>> GetActivitiesAsync(long userId, bool onlyUnread, long? cursorId, int limit, CancellationToken token) => throw new NotSupportedException();

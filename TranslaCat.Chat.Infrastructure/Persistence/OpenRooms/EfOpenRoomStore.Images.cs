@@ -15,7 +15,8 @@ public sealed partial class EfOpenRoomStore : IOpenProfileImageStore
     {
         await using var db = await contexts.CreateDbContextAsync(token);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
-        if (contentPolicy is not null) await ChatAccountWriteGate.AcquireAsync(db, [userId], token);
+        if (contentPolicy is not null)
+            await ChatAccountWriteGate.AcquireAsync(db, [userId], token);
         IChatProfileImageObjectStore? objects = null;
         string? newKey = null;
         string? oldKey = null;
@@ -44,11 +45,13 @@ public sealed partial class EfOpenRoomStore : IOpenProfileImageStore
 
             oldKey = row.Profile.ProfileImageObjectKey;
             newKey = ChatProfileImagePolicy.ObjectKey(member.Id, true, ChatProfileImageKind.Profile, validated.Extension);
-            if (contentPolicy is not null && imageJournal is null) throw new ChatProfileImageUnavailableException();
+            if (contentPolicy is not null && imageJournal is null)
+                throw new ChatProfileImageUnavailableException();
             if (imageJournal is not null)
                 await imageJournal.StartAsync(userId, member.Id, newKey, oldKey, token);
             await objects.StoreAsync(newKey, validated.ContentType, validated.Bytes, token);
-            if (imageJournal is not null) await imageJournal.ConfirmPutAsync(userId, newKey, token);
+            if (imageJournal is not null)
+                await imageJournal.ConfirmPutAsync(userId, newKey, token);
             row.Profile.ProfileImageObjectKey = newKey;
             row.Profile.UpdatedAt = now;
             row.Profile.UpdatedBy = audit;
@@ -79,8 +82,10 @@ public sealed partial class EfOpenRoomStore : IOpenProfileImageStore
         }
 
         // commit 전에는 기존 object를 지우지 않는다. cleanup 실패는 새로 저장된 profile을 되돌리지 않는다.
-        if (imageJournal is null) await ChatProfileImageCleanup.DeleteAsync(objects, oldKey, logger);
-        else await ProcessImageJournalAsync(userId);
+        if (imageJournal is null)
+            await ChatProfileImageCleanup.DeleteAsync(objects, oldKey, logger);
+        else
+            await ProcessImageJournalAsync(userId);
         try
         {
             await events!.DeliverAsync(change, CancellationToken.None);

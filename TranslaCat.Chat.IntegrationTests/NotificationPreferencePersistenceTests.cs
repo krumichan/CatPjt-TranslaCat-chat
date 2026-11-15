@@ -76,13 +76,21 @@ public sealed class NotificationPreferencePersistenceTests(ChatMySqlFixture fixt
         var room = await fixture.SeedReadRoomAsync(userId: User());
         long other = User() + 1000;
         await using var db = await fixture.Contexts.CreateDbContextAsync();
-        db.ChatRoomMembers.Add(new() { ChatRoomId = room.RoomId, UserId = other, Role = "MEMBER",
-            JoinedAt = ChatMySqlFixture.Epoch, CreatedAt = ChatMySqlFixture.Epoch, UpdatedAt = ChatMySqlFixture.Epoch });
+        db.ChatRoomMembers.Add(new()
+        {
+            ChatRoomId = room.RoomId,
+            UserId = other,
+            Role = "MEMBER",
+            JoinedAt = ChatMySqlFixture.Epoch,
+            CreatedAt = ChatMySqlFixture.Epoch,
+            UpdatedAt = ChatMySqlFixture.Epoch
+        });
         await db.SaveChangesAsync();
         var preferences = Preferences();
         var push = new EfChatPushStore(fixture.Contexts, new());
         var own = Job(room);
-        var otherJob = Job(room); otherJob.RecipientUserId = other;
+        var otherJob = Job(room);
+        otherJob.RecipientUserId = other;
 
         // 실행 / 검증
         await preferences.PutRoomAsync(room.UserId, room.RoomId, true, default);
@@ -116,20 +124,41 @@ public sealed class NotificationPreferencePersistenceTests(ChatMySqlFixture fixt
         await using var db = await fixture.Contexts.CreateDbContextAsync();
         var member = await db.ChatRoomMembers.SingleAsync(row => row.Id == room.MemberId);
         var entity = await db.ChatRooms.SingleAsync(row => row.Id == room.RoomId);
-        var open = new OpenChatRoomEntity { ChatRoomId = room.RoomId, Visibility = "PUBLIC", MaxMemberCount = 10,
-            Status = scenario == "closed-open" ? "CLOSED" : "ACTIVE", CreatedAt = ChatMySqlFixture.Epoch, UpdatedAt = ChatMySqlFixture.Epoch };
-        db.OpenChatRooms.Add(open);
-        if (scenario == "inactive-member") member.Active = false;
-        if (scenario == "deleted-member") member.DeletedAt = ChatMySqlFixture.Epoch;
-        if (scenario == "inactive-room") entity.Active = false;
-        if (scenario == "deleted-room") entity.DeletedAt = ChatMySqlFixture.Epoch;
-        if (scenario == "banned") db.OpenChatBans.Add(new()
+        var open = new OpenChatRoomEntity
         {
-            ChatRoomId = room.RoomId, TargetUserId = room.UserId, TargetChatRoomMemberId = room.MemberId,
-            TargetMemberCode = "OC-SYNTH", NicknameSnapshot = "synthetic", LastJoinedAtSnapshot = member.JoinedAt,
-            TargetRoleSnapshot = "MEMBER", BannedByMemberId = room.MemberId, BannedByRole = "OWNER",
-            BannedAt = ChatMySqlFixture.Epoch, Reason = "synthetic", CreatedAt = ChatMySqlFixture.Epoch, UpdatedAt = ChatMySqlFixture.Epoch
-        });
+            ChatRoomId = room.RoomId,
+            Visibility = "PUBLIC",
+            MaxMemberCount = 10,
+            Status = scenario == "closed-open" ? "CLOSED" : "ACTIVE",
+            CreatedAt = ChatMySqlFixture.Epoch,
+            UpdatedAt = ChatMySqlFixture.Epoch
+        };
+        db.OpenChatRooms.Add(open);
+        if (scenario == "inactive-member")
+            member.Active = false;
+        if (scenario == "deleted-member")
+            member.DeletedAt = ChatMySqlFixture.Epoch;
+        if (scenario == "inactive-room")
+            entity.Active = false;
+        if (scenario == "deleted-room")
+            entity.DeletedAt = ChatMySqlFixture.Epoch;
+        if (scenario == "banned")
+            db.OpenChatBans.Add(new()
+            {
+                ChatRoomId = room.RoomId,
+                TargetUserId = room.UserId,
+                TargetChatRoomMemberId = room.MemberId,
+                TargetMemberCode = "OC-SYNTH",
+                NicknameSnapshot = "synthetic",
+                LastJoinedAtSnapshot = member.JoinedAt,
+                TargetRoleSnapshot = "MEMBER",
+                BannedByMemberId = room.MemberId,
+                BannedByRole = "OWNER",
+                BannedAt = ChatMySqlFixture.Epoch,
+                Reason = "synthetic",
+                CreatedAt = ChatMySqlFixture.Epoch,
+                UpdatedAt = ChatMySqlFixture.Epoch
+            });
         await db.SaveChangesAsync();
         long actor = scenario == "foreign" ? User() : room.UserId;
 
@@ -147,19 +176,37 @@ public sealed class NotificationPreferencePersistenceTests(ChatMySqlFixture fixt
         long recipient = User();
         var room = await fixture.SeedReadRoomAsync("OPEN", User());
         await using var db = await fixture.Contexts.CreateDbContextAsync();
-        db.OpenChatRooms.Add(new() { ChatRoomId = room.RoomId, Visibility = "PUBLIC", MaxMemberCount = 10, Status = "ACTIVE",
-            CreatedAt = ChatMySqlFixture.Epoch, UpdatedAt = ChatMySqlFixture.Epoch });
+        db.OpenChatRooms.Add(new()
+        {
+            ChatRoomId = room.RoomId,
+            Visibility = "PUBLIC",
+            MaxMemberCount = 10,
+            Status = "ACTIVE",
+            CreatedAt = ChatMySqlFixture.Epoch,
+            UpdatedAt = ChatMySqlFixture.Epoch
+        });
         var notification = new ChatNotificationEntity
         {
-            RecipientUserId = recipient, ActorUserId = room.UserId, ChatRoomId = room.RoomId, NotificationType = "CHAT_INVITATION",
+            RecipientUserId = recipient,
+            ActorUserId = room.UserId,
+            ChatRoomId = room.RoomId,
+            NotificationType = "CHAT_INVITATION",
             PayloadJson = "{\"schemaVersion\":1,\"invitationKind\":\"OPEN_LINK\",\"roomType\":\"OPEN\"}",
-            SourceEventKey = "open-link:synthetic:" + Guid.NewGuid().ToString("N"), CreatedAt = DateTime.UtcNow
+            SourceEventKey = "open-link:synthetic:" + Guid.NewGuid().ToString("N"),
+            CreatedAt = DateTime.UtcNow
         };
         db.ChatNotifications.Add(notification);
         await db.SaveChangesAsync();
-        var job = new OpenInvitationPushOutboxEntity { NotificationId = notification.Id, RoomId = room.RoomId,
-            SenderUserId = room.UserId, RecipientUserId = recipient, CreatedAtUtc = DateTime.UtcNow,
-            EventId = Guid.NewGuid().ToString("D"), DueAtUtc = DateTime.UtcNow };
+        var job = new OpenInvitationPushOutboxEntity
+        {
+            NotificationId = notification.Id,
+            RoomId = room.RoomId,
+            SenderUserId = room.UserId,
+            RecipientUserId = recipient,
+            CreatedAtUtc = DateTime.UtcNow,
+            EventId = Guid.NewGuid().ToString("D"),
+            DueAtUtc = DateTime.UtcNow
+        };
         db.OpenInvitationPushOutbox.Add(job);
         await db.SaveChangesAsync();
         var push = new EfOpenInvitationPushStore(fixture.Contexts, new());
@@ -183,7 +230,10 @@ public sealed class NotificationPreferencePersistenceTests(ChatMySqlFixture fixt
 
     private static ChatPushOutboxEntity Job(SeededReadRoom room) => new()
     {
-        RoomId = room.RoomId, MessageId = room.FirstId, SenderUserId = room.UserId + 1,
-        RecipientUserId = room.UserId, CreatedAtUtc = DateTime.UtcNow
+        RoomId = room.RoomId,
+        MessageId = room.FirstId,
+        SenderUserId = room.UserId + 1,
+        RecipientUserId = room.UserId,
+        CreatedAtUtc = DateTime.UtcNow
     };
 }

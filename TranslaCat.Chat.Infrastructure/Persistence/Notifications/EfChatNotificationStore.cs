@@ -101,7 +101,8 @@ public sealed class EfChatNotificationStore(IDbContextFactory<ChatDbContext> con
             }
             bool authorDeleted = contentPolicy is not null && message.SenderUserId is { } authorId
                 && await context.ChatAccountDeletions.AnyAsync(gone => gone.UserId == authorId, cancellationToken);
-            if (authorDeleted) openName = "탈퇴한 사용자";
+            if (authorDeleted)
+                openName = "탈퇴한 사용자";
             result.Add(new(row.RoomId, row.RoomType, row.SourceType, row.RoomName, message.Id, authorDeleted ? null : message.SenderUserId,
                 aiName, openName, message.MessageType, message.Content, message.CreatedAt, partnerId, row.UnreadCount, row.FirstUnreadId, authorDeleted));
         }

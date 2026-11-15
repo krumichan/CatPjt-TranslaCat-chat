@@ -14,7 +14,8 @@ public static class ChatPushBadge
 
     public static async Task<int?> ReadAsync(IChatNotificationStore? notifications, long userId, CancellationToken token)
     {
-        if (notifications is null) return null;
+        if (notifications is null)
+            return null;
         try
         {
             return Count(await notifications.GetSummaryAsync(userId, token));

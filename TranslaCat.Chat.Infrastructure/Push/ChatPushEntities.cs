@@ -6,37 +6,100 @@ namespace TranslaCat.Chat.Infrastructure.Push;
 // outbox에는 본문이나 토큰을 복제하지 않는다. 수신자는 메시지 transaction의 실제 멤버 snapshot이다.
 public sealed class ChatPushOutboxEntity
 {
-    public long Id { get; set; }
-    public long MessageId { get; set; }
-    public long RoomId { get; set; }
-    public long SenderUserId { get; set; }
-    public long RecipientUserId { get; set; }
+    public long Id
+    {
+        get; set;
+    }
+    public long MessageId
+    {
+        get; set;
+    }
+    public long RoomId
+    {
+        get; set;
+    }
+    public long SenderUserId
+    {
+        get; set;
+    }
+    public long RecipientUserId
+    {
+        get; set;
+    }
     public string EventId { get; set; } = null!;
     public string Status { get; set; } = "PENDING";
-    public int Attempts { get; set; }
-    public DateTime CreatedAtUtc { get; set; }
-    public DateTime DueAtUtc { get; set; }
-    public string? LeaseToken { get; set; }
-    public DateTime? LeaseExpiresAtUtc { get; set; }
+    public int Attempts
+    {
+        get; set;
+    }
+    public DateTime CreatedAtUtc
+    {
+        get; set;
+    }
+    public DateTime DueAtUtc
+    {
+        get; set;
+    }
+    public string? LeaseToken
+    {
+        get; set;
+    }
+    public DateTime? LeaseExpiresAtUtc
+    {
+        get; set;
+    }
 }
 
 // 설치 주소는 BE에서 전송 직전에 다시 조회한다. 영속 보관하는 값은 조건부 무효화에 필요한 버전뿐이다.
 public sealed class ChatPushDeliveryEntity
 {
-    public long Id { get; set; }
-    public long OutboxId { get; set; }
+    public long Id
+    {
+        get; set;
+    }
+    public long OutboxId
+    {
+        get; set;
+    }
     public string InstallationId { get; set; } = null!;
     public string AccountBindingId { get; set; } = null!;
-    public long Generation { get; set; }
-    public long TokenVersion { get; set; }
+    public long Generation
+    {
+        get; set;
+    }
+    public long TokenVersion
+    {
+        get; set;
+    }
     public string Status { get; set; } = "SEND";
-    public int Attempts { get; set; }
-    public string? TicketId { get; set; }
-    public DateTime? ReceiptExpiresAtUtc { get; set; }
-    public DateTime CreatedAtUtc { get; set; }
-    public DateTime DueAtUtc { get; set; }
-    public string? LeaseToken { get; set; }
-    public DateTime? LeaseExpiresAtUtc { get; set; }
+    public int Attempts
+    {
+        get; set;
+    }
+    public string? TicketId
+    {
+        get; set;
+    }
+    public DateTime? ReceiptExpiresAtUtc
+    {
+        get; set;
+    }
+    public DateTime CreatedAtUtc
+    {
+        get; set;
+    }
+    public DateTime DueAtUtc
+    {
+        get; set;
+    }
+    public string? LeaseToken
+    {
+        get; set;
+    }
+    public DateTime? LeaseExpiresAtUtc
+    {
+        get; set;
+    }
 }
 
 internal sealed class ChatPushOutboxConfiguration : IEntityTypeConfiguration<ChatPushOutboxEntity>

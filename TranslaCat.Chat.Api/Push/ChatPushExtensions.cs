@@ -12,7 +12,8 @@ public static class ChatPushExtensions
         if (options.Enabled && options.LeaseSeconds < coreTimeout * 2 + options.RequestTimeoutSeconds + 10)
             throw new InvalidOperationException("Chat push lease must cover bounded core and provider calls.");
         services.AddSingleton(options);
-        if (!options.Enabled) return services;
+        if (!options.Enabled)
+            return services;
 
         // 명시적으로 켠 worker는 DB와 인증된 core adapter 설정을 필요로 한다. secret 기본값은 만들지 않는다.
         if (string.IsNullOrWhiteSpace(configuration["Chat:Database:ConnectionString"])

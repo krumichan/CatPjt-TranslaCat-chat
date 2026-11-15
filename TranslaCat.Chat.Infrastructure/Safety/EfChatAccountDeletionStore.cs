@@ -96,13 +96,18 @@ public sealed class EfChatAccountDeletionStore(
             if (room.OwnerId == userId)
             {
                 room.OwnerId = successor?.UserId;
-                if (successor is not null) successor.Role = "OWNER";
+                if (successor is not null)
+                    successor.Role = "OWNER";
             }
             if (successor is null)
             {
                 room.Active = false;
                 var open = await db.OpenChatRooms.SingleOrDefaultAsync(row => row.ChatRoomId == room.Id, token);
-                if (open is not null) { open.Status = "CLOSED"; open.ClosedAt ??= now; }
+                if (open is not null)
+                {
+                    open.Status = "CLOSED";
+                    open.ClosedAt ??= now;
+                }
             }
             room.UpdatedAt = now;
             room.UpdatedBy = null;
@@ -132,7 +137,8 @@ public sealed class EfChatAccountDeletionStore(
 
         // provider에 이미 넘긴 알림은 회수할 수 없다. 아직 보낼 수 있는 큐와 lease만 무효화한다.
         await SuppressPushAsync(db, userId, token);
-        if (!string.IsNullOrWhiteSpace(request.AuditIdentity)) await ScrubAuditAsync(db, request.AuditIdentity, cutoff, token);
+        if (!string.IsNullOrWhiteSpace(request.AuditIdentity))
+            await ScrubAuditAsync(db, request.AuditIdentity, cutoff, token);
 
         // 다른 사람/AI가 같은 객체를 참조하면 해당 공유 파일을 삭제하지 않는다.
         foreach (string key in keys.Distinct(StringComparer.Ordinal))
@@ -142,7 +148,12 @@ public sealed class EfChatAccountDeletionStore(
                 || await db.ChatAiAgents.AnyAsync(row => row.ProfileImageObjectKey == key || row.ProfileBackgroundImageObjectKey == key, token);
             if (!shared && !imageIntents.Any(row => row.ObjectKey == key)
                 && !await db.ChatAccountDeletionObjects.AnyAsync(row => row.UserId == userId && row.ObjectKey == key, token))
-                db.ChatAccountDeletionObjects.Add(new() { UserId = userId, ObjectKey = key, DueAtUtc = nowUtc });
+                db.ChatAccountDeletionObjects.Add(new()
+                {
+                    UserId = userId,
+                    ObjectKey = key,
+                    DueAtUtc = nowUtc
+                });
         }
         await db.SaveChangesAsync(token);
     }
@@ -186,14 +197,16 @@ public sealed class EfChatAccountDeletionStore(
 
     public async Task ProcessObjectsAsync(long? onlyUserId, CancellationToken token)
     {
-        if (imageJournal is not null) await imageJournal.ProcessDueAsync(onlyUserId, token);
+        if (imageJournal is not null)
+            await imageJournal.ProcessDueAsync(onlyUserId, token);
         await using var db = await contexts.CreateDbContextAsync(token);
         var rows = await db.ChatAccountDeletionObjects.Where(row => row.CompletedAtUtc == null
                 && (onlyUserId == null || row.UserId == onlyUserId) && row.DueAtUtc <= time.GetUtcNow().UtcDateTime)
             .OrderBy(row => row.Id).Take(50).ToListAsync(token);
         foreach (var row in rows)
         {
-            if (core is null) break;
+            if (core is null)
+                break;
             try
             {
                 await core.DeleteAsync(row.ObjectKey, token);

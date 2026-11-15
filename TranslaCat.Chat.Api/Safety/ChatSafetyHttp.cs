@@ -14,8 +14,14 @@ namespace TranslaCat.Chat.Api.Safety;
 
 public sealed class ChatSafetyOptions
 {
-    public bool Enabled { get; set; }
-    public bool AccountDeletionEnabled { get; set; }
+    public bool Enabled
+    {
+        get; set;
+    }
+    public bool AccountDeletionEnabled
+    {
+        get; set;
+    }
 }
 
 [ApiController, AllowAnonymous, ChatAccountDeletionAuthentication, ChatSafetyJson, RequestSizeLimit(4096)]
@@ -25,19 +31,29 @@ public sealed class ChatAccountDeletionController(IOptions<ChatServiceIngressOpt
     [HttpGet("internal/v1/chat/accounts/{userId:long}/deletion/capabilities")]
     public async Task<IActionResult> Capabilities(long userId, CancellationToken token)
     {
-        if (!await AuthorizedAsync(userId, token)) return Unauthorized();
+        if (!await AuthorizedAsync(userId, token))
+            return Unauthorized();
         Response.Headers.CacheControl = "no-store";
-        if (!options.AccountDeletionEnabled) return StatusCode(503, new { code = "CHAT_ACCOUNT_DELETION_DISABLED" });
+        if (!options.AccountDeletionEnabled)
+            return StatusCode(503, new
+            {
+                code = "CHAT_ACCOUNT_DELETION_DISABLED"
+            });
         var contexts = services.GetService<IDbContextFactory<ChatDbContext>>();
         if (contexts is null || services.GetService<HttpChatCoreClient>() is null
             || services.GetService<IOpenProfileUploadJournal>() is null
-            || !ChatAccountDeletionReleaseGate.NormalWriteCoverageComplete) return StatusCode(503);
+            || !ChatAccountDeletionReleaseGate.NormalWriteCoverageComplete)
+            return StatusCode(503);
         try
         {
             // 호환성 조회는 DDL/업무 변경 없이 필수 테이블을 실제로 읽을 수 있는지만 확인한다.
             await using var db = await contexts.CreateDbContextAsync(token);
             await ChatAccountDeletionSchema.ValidateAsync(db, token);
-            return Ok(new { version = "chat-account-deletion-v1", ready = true });
+            return Ok(new
+            {
+                version = "chat-account-deletion-v1",
+                ready = true
+            });
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception) { return StatusCode(503, new { code = "CHAT_ACCOUNT_DELETION_UNAVAILABLE" }); }
@@ -46,19 +62,27 @@ public sealed class ChatAccountDeletionController(IOptions<ChatServiceIngressOpt
     [HttpPost("internal/v1/chat/accounts/{userId:long}/deletion")]
     public async Task<IActionResult> Delete(long userId, [FromBody] ChatAccountDeletionRequest request, CancellationToken token)
     {
-        if (!await AuthorizedAsync(userId, token)) return Unauthorized();
+        if (!await AuthorizedAsync(userId, token))
+            return Unauthorized();
         Response.Headers.CacheControl = "no-store";
         if (!options.AccountDeletionEnabled || !ChatAccountDeletionReleaseGate.NormalWriteCoverageComplete)
-            return StatusCode(503, new { code = "CHAT_ACCOUNT_DELETION_DISABLED" });
+            return StatusCode(503, new
+            {
+                code = "CHAT_ACCOUNT_DELETION_DISABLED"
+            });
         try
         {
             var store = services.GetService<IChatAccountDeletionStore>();
-            if (store is null) return StatusCode(503);
+            if (store is null)
+                return StatusCode(503);
             return Ok(await store.DeleteAsync(userId, request, token));
         }
         catch (ChatSafetyException error)
         {
-            return StatusCode(error.Code == "CHAT_ACCOUNT_DELETION_CONFLICT" ? 409 : 400, new { error.Code });
+            return StatusCode(error.Code == "CHAT_ACCOUNT_DELETION_CONFLICT" ? 409 : 400, new
+            {
+                error.Code
+            });
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception) { return StatusCode(503, new { code = "CHAT_ACCOUNT_DELETION_UNAVAILABLE" }); }
@@ -69,7 +93,8 @@ public sealed class ChatAccountDeletionController(IOptions<ChatServiceIngressOpt
         Response.Headers.CacheControl = "no-store";
         var values = Request.Headers.Authorization;
         if (!ingress.Value.Enabled || values.Count != 1 || values[0] is not { } value
-            || !value.StartsWith("Bearer ", StringComparison.Ordinal)) return false;
+            || !value.StartsWith("Bearer ", StringComparison.Ordinal))
+            return false;
 
         // 사용자 JWT, 일반 chat:http 또는 다른 계정의 서비스 토큰으로 삭제 경계를 통과할 수 없다.
         var identity = await ChatServiceJwt.ValidateAsync(value[7..], ingress.Value, environment.EnvironmentName,
@@ -116,7 +141,8 @@ public static class ChatSafetyHttpExtensions
         var options = configuration.GetSection("Chat:Safety").Get<ChatSafetyOptions>() ?? new();
         services.AddSingleton(options);
         services.AddChatReportHttp();
-        if (!options.Enabled && !options.AccountDeletionEnabled) return services;
+        if (!options.Enabled && !options.AccountDeletionEnabled)
+            return services;
 
         services.AddScoped<IChatContentPolicy, ChatContentPolicy>();
         services.AddScoped<ChatRealtimeContentPolicy>();
@@ -131,9 +157,11 @@ public static class ChatSafetyHttpExtensions
         if (ChatAccountDeletionReleaseGate.NormalWriteCoverageComplete)
         {
             services.AddScoped<IChatAccountDeletionStore>(provider => provider.GetRequiredService<EfChatAccountDeletionStore>());
-            if (options.AccountDeletionEnabled) services.AddHostedService<ChatAccountDeletionWorker>();
+            if (options.AccountDeletionEnabled)
+                services.AddHostedService<ChatAccountDeletionWorker>();
         }
-        if (options.Enabled) services.AddHostedService<ChatReportEvidenceWorker>();
+        if (options.Enabled)
+            services.AddHostedService<ChatReportEvidenceWorker>();
         return services;
     }
 }

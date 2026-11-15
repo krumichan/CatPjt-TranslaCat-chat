@@ -47,10 +47,19 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         Assert.Equal(seed.UserId + 1, (await db.ChatReports.SingleAsync(row => row.Id == first.Id)).TargetUserId);
         Assert.Equal(1, await db.ChatReports.CountAsync(row => row.ReporterUserId == seed.UserId));
         var conflict = await Assert.ThrowsAsync<ChatSafetyException>(() => store.CreateAsync(seed.UserId, seed.RoomId,
-            request with { Detail = "다른 내용" }, Now, default));
+            request with
+            {
+                Detail = "다른 내용"
+            }, Now, default));
         Assert.Equal("CHAT_REPORT_REQUEST_CONFLICT", conflict.Code);
         await Assert.ThrowsAsync<ChatSafetyException>(() => store.CreateAsync(seed.UserId, seed.RoomId,
-            request with { ClientRequestId = Guid.NewGuid().ToString("D"), TargetType = "MEMBER", MessageId = null, TargetUserId = seed.UserId + 1 }, Now, default));
+            request with
+            {
+                ClientRequestId = Guid.NewGuid().ToString("D"),
+                TargetType = "MEMBER",
+                MessageId = null,
+                TargetUserId = seed.UserId + 1
+            }, Now, default));
     }
 
     [Fact]
@@ -122,11 +131,27 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         var notifications = new EfChatNotificationStore(fixture.Contexts, policy);
         var badge = await notifications.GetSummaryAsync(seed.UserId, default);
         var realtime = new ChatRealtimeContentPolicy(fixture.Contexts, policy);
-        string json = JsonSerializer.Serialize(new { eventType = "chat.message.created", message = new { id = seed.MessageId,
-            content = "합성 원문 body", senderUserId = seed.UserId + 1, senderName = "합성 이름", senderEmail = "synthetic@example.invalid", translations = new[] { new { translatedContent = "translated private" } } } });
+        string json = JsonSerializer.Serialize(new
+        {
+            eventType = "chat.message.created",
+            message = new
+            {
+                id = seed.MessageId,
+                content = "합성 원문 body",
+                senderUserId = seed.UserId + 1,
+                senderName = "합성 이름",
+                senderEmail = "synthetic@example.invalid",
+                translations = new[] { new { translatedContent = "translated private" } }
+            }
+        });
         string masked = (await realtime.PrepareAsync(seed.UserId, seed.RoomId, json, default))!;
         string? translated = await realtime.PrepareAsync(seed.UserId, seed.RoomId,
-            JsonSerializer.Serialize(new { eventType = "chat.translation.completed", messageId = seed.MessageId, translatedContent = "translated private" }), default);
+            JsonSerializer.Serialize(new
+            {
+                eventType = "chat.translation.completed",
+                messageId = seed.MessageId,
+                translatedContent = "translated private"
+            }), default);
 
         // 검증: 같은 message ID와 pagination 경계를 유지하며 DB 원문/번역은 별도 보존한다.
         Assert.Equal(seed.MessageId, row.Id);
@@ -150,8 +175,15 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         long visibleUserId = seed.UserId + 2;
         await using (var setup = await fixture.Contexts.CreateDbContextAsync())
         {
-            setup.ChatRoomMembers.Add(new() { ChatRoomId = seed.RoomId, UserId = visibleUserId, Role = "MEMBER",
-                JoinedAt = ChatMySqlFixture.Epoch, CreatedAt = Now, UpdatedAt = Now });
+            setup.ChatRoomMembers.Add(new()
+            {
+                ChatRoomId = seed.RoomId,
+                UserId = visibleUserId,
+                Role = "MEMBER",
+                JoinedAt = ChatMySqlFixture.Epoch,
+                CreatedAt = Now,
+                UpdatedAt = Now
+            });
             await setup.SaveChangesAsync();
         }
         var handler = new CoreHandler(true) { OnlyBlockedRecipient = seed.UserId };
@@ -159,10 +191,21 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         await using var host = await SafetyRealtimeHost.StartAsync(fixture.Contexts, policy);
         using var blocked = await host.ConnectAsync(seed.UserId, seed.RoomId);
         using var visible = await host.ConnectAsync(visibleUserId, seed.RoomId);
-        string created = JsonSerializer.Serialize(new { eventType = "chat.message.created", chatRoomId = seed.RoomId,
-            message = new { id = seed.MessageId, senderUserId = seed.UserId + 1, senderEmail = "private-sender@example.invalid",
-                senderName = "private sender", senderProfileImageUrl = "https://example.invalid/private.png", content = "private source text",
-                translations = new[] { new { translatedContent = "private translation" } } } });
+        string created = JsonSerializer.Serialize(new
+        {
+            eventType = "chat.message.created",
+            chatRoomId = seed.RoomId,
+            message = new
+            {
+                id = seed.MessageId,
+                senderUserId = seed.UserId + 1,
+                senderEmail = "private-sender@example.invalid",
+                senderName = "private sender",
+                senderProfileImageUrl = "https://example.invalid/private.png",
+                content = "private source text",
+                translations = new[] { new { translatedContent = "private translation" } }
+            }
+        });
 
         // 실행: 같은 shared publish를 수신자별로 판정한다.
         await host.Broker.PublishRoomAsync(seed.RoomId, created);
@@ -179,8 +222,13 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         Assert.Contains("\"contentVisibility\":\"VISIBLE\"", visibleFrame);
         Assert.Contains("private source text", visibleFrame);
 
-        string completed = JsonSerializer.Serialize(new { eventType = "chat.translation.completed", chatRoomId = seed.RoomId,
-            messageId = seed.MessageId, translatedContent = "late private translation" });
+        string completed = JsonSerializer.Serialize(new
+        {
+            eventType = "chat.translation.completed",
+            chatRoomId = seed.RoomId,
+            messageId = seed.MessageId,
+            translatedContent = "late private translation"
+        });
         await host.Broker.PublishRoomAsync(seed.RoomId, completed);
         Assert.Contains("late private translation", await visible.ReceiveAsync());
         await blocked.AssertBarrierAsync("no-hidden-translation");
@@ -200,9 +248,16 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         long notificationId;
         await using (var setup = await fixture.Contexts.CreateDbContextAsync())
         {
-            var notification = new ChatNotificationEntity { RecipientUserId = seed.UserId, ActorUserId = seed.UserId + 1,
-                NotificationType = "CHAT_INVITATION", ChatRoomId = seed.RoomId, SourceEventKey = "late-private:" + Guid.NewGuid().ToString("N"),
-                PayloadJson = "{\"inviterOpenNickname\":\"private old nickname\"}", CreatedAt = Now };
+            var notification = new ChatNotificationEntity
+            {
+                RecipientUserId = seed.UserId,
+                ActorUserId = seed.UserId + 1,
+                NotificationType = "CHAT_INVITATION",
+                ChatRoomId = seed.RoomId,
+                SourceEventKey = "late-private:" + Guid.NewGuid().ToString("N"),
+                PayloadJson = "{\"inviterOpenNickname\":\"private old nickname\"}",
+                CreatedAt = Now
+            };
             setup.ChatNotifications.Add(notification);
             await setup.SaveChangesAsync();
             notificationId = notification.Id;
@@ -212,19 +267,43 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         await using var host = await SafetyRealtimeHost.StartAsync(fixture.Contexts, policy);
         using var socket = await host.ConnectAsync(seed.UserId, seed.RoomId);
         await socket.SubscribeAsync("private", "/user/queue/chat/notifications");
-        string created = JsonSerializer.Serialize(new { eventType = "chat.message.created", chatRoomId = seed.RoomId,
-            message = new { id = seed.MessageId, senderUserId = seed.UserId + 1, senderEmail = "private-old@example.invalid",
-                senderName = "private old nickname", content = "shared original", translations = Array.Empty<object>() } });
+        string created = JsonSerializer.Serialize(new
+        {
+            eventType = "chat.message.created",
+            chatRoomId = seed.RoomId,
+            message = new
+            {
+                id = seed.MessageId,
+                senderUserId = seed.UserId + 1,
+                senderEmail = "private-old@example.invalid",
+                senderName = "private old nickname",
+                content = "shared original",
+                translations = Array.Empty<object>()
+            }
+        });
         Task first = host.Broker.PublishRoomAsync(seed.RoomId, created);
         await handler.RelationReached.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Task profile = host.Broker.PublishRoomAsync(seed.RoomId, JsonSerializer.Serialize(new
         {
-            eventType = "chat.open-profile.updated", roomId = seed.RoomId, openChatMemberId = seed.OtherMemberId,
-            nickname = "private old nickname", profileImageUrl = "https://example.invalid/private-old.png"
+            eventType = "chat.open-profile.updated",
+            roomId = seed.RoomId,
+            openChatMemberId = seed.OtherMemberId,
+            nickname = "private old nickname",
+            profileImageUrl = "https://example.invalid/private-old.png"
         }));
         Task invitation = host.Broker.PublishUserAsync($"safety-{seed.UserId}@example.invalid", "/queue/chat/notifications",
-            JsonSerializer.Serialize(new { eventType = "chat.notification.created", notification = new { id = notificationId,
-                payload = new { inviterOpenNickname = "private old nickname" } } }));
+            JsonSerializer.Serialize(new
+            {
+                eventType = "chat.notification.created",
+                notification = new
+                {
+                    id = notificationId,
+                    payload = new
+                    {
+                        inviterOpenNickname = "private old nickname"
+                    }
+                }
+            }));
 
         // 실행: 대기 중 source 계정의 cleanup을 완료한 뒤 과거 외부 응답/DTO를 풀어 준다.
         var cleanup = new EfChatAccountDeletionStore(fixture.Contexts, null, instant => instant.UtcDateTime, new FixedTime());
@@ -257,8 +336,16 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
             var target = await setup.ChatRoomMembers.SingleAsync(row => row.UserId == deletedId && row.ChatRoomId == seed.RoomId);
             target.Role = "OWNER";
             (await setup.ChatMessages.SingleAsync(row => row.Id == seed.MessageId)).CreatedBy = audit;
-            setup.ChatPushOutbox.Add(new() { MessageId = seed.MessageId, RoomId = seed.RoomId, SenderUserId = deletedId,
-                RecipientUserId = seed.UserId, EventId = Guid.NewGuid().ToString("D"), CreatedAtUtc = Now, DueAtUtc = Now });
+            setup.ChatPushOutbox.Add(new()
+            {
+                MessageId = seed.MessageId,
+                RoomId = seed.RoomId,
+                SenderUserId = deletedId,
+                RecipientUserId = seed.UserId,
+                EventId = Guid.NewGuid().ToString("D"),
+                CreatedAtUtc = Now,
+                DueAtUtc = Now
+            });
             await setup.SaveChangesAsync();
         }
         var time = new FixedTime();
@@ -349,8 +436,14 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         Assert.Null(goneRoom.OwnerId);
         Assert.Null(goneRoom.CreatedBy);
         // BE 예약 해제 뒤 동일 이메일로 만든 새 행은, 이미 local-complete인 이전 작업의 재시도가 건드리지 않는다.
-        var newAccountRoom = new ChatRoomEntity { RoomType = "GROUP", OwnerId = seed.UserId + 99,
-            CreatedAt = Now.AddMinutes(2), UpdatedAt = Now.AddMinutes(2), CreatedBy = "fence-synthetic@example.invalid" };
+        var newAccountRoom = new ChatRoomEntity
+        {
+            RoomType = "GROUP",
+            OwnerId = seed.UserId + 99,
+            CreatedAt = Now.AddMinutes(2),
+            UpdatedAt = Now.AddMinutes(2),
+            CreatedBy = "fence-synthetic@example.invalid"
+        };
         reader.ChatRooms.Add(newAccountRoom);
         await reader.SaveChangesAsync();
         cleanupTime.Instant = cleanupTime.Instant.AddMinutes(2);
@@ -395,7 +488,10 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         Assert.Null(room.CreatedBy);
         Assert.False((await read.ChatRoomMembers.SingleAsync(row => row.ChatRoomId == createdId && row.UserId == deletedId)).Active);
         var failure = await Assert.ThrowsAsync<ChatSafetyException>(() => rooms.CreateOrReuseAsync(deletedId,
-            request with { Name = "정리 후 금지" }, [seed.UserId], Now.AddMinutes(2), default));
+            request with
+            {
+                Name = "정리 후 금지"
+            }, [seed.UserId], Now.AddMinutes(2), default));
         Assert.Equal("CHAT_ACCOUNT_DELETED", failure.Code);
         Assert.False(await read.ChatRooms.AnyAsync(row => row.Name == "정리 후 금지"));
     }
@@ -407,8 +503,16 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         var seed = await SeedAsync(48501);
         await using (var setup = await fixture.Contexts.CreateDbContextAsync())
         {
-            setup.ChatMessageTranslations.Add(new() { ChatMessageId = seed.MessageId, LanguageCode = "ja",
-                Status = "COMPLETED", TranslatedContent = "합성 비공개 번역", CompletedAt = Now, CreatedAt = Now, UpdatedAt = Now });
+            setup.ChatMessageTranslations.Add(new()
+            {
+                ChatMessageId = seed.MessageId,
+                LanguageCode = "ja",
+                Status = "COMPLETED",
+                TranslatedContent = "합성 비공개 번역",
+                CompletedAt = Now,
+                CreatedAt = Now,
+                UpdatedAt = Now
+            });
             await setup.SaveChangesAsync();
         }
         var handler = new CoreHandler(true);
@@ -436,8 +540,15 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         var seed = await SeedAsync(48601);
         await using (var setup = await fixture.Contexts.CreateDbContextAsync())
         {
-            setup.ChatMessageTranslations.Add(new() { ChatMessageId = seed.MessageId, LanguageCode = "ja",
-                Status = "FAILED", TranslatedContent = "이전 공유 번역", CreatedAt = Now, UpdatedAt = Now });
+            setup.ChatMessageTranslations.Add(new()
+            {
+                ChatMessageId = seed.MessageId,
+                LanguageCode = "ja",
+                Status = "FAILED",
+                TranslatedContent = "이전 공유 번역",
+                CreatedAt = Now,
+                UpdatedAt = Now
+            });
             await setup.SaveChangesAsync();
         }
         var profiles = new PausingProfiles();
@@ -484,7 +595,16 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         var message = ChatMySqlFixture.Message(room.Id, userId + 1, ChatMySqlFixture.Epoch.AddMinutes(1));
         message.Content = "합성 원문 body";
         db.ChatMessages.Add(message);
-        if (type == "OPEN") db.OpenChatRooms.Add(new() { ChatRoomId = room.Id, Visibility = "PUBLIC", MaxMemberCount = 100, Status = "ACTIVE", CreatedAt = Now, UpdatedAt = Now });
+        if (type == "OPEN")
+            db.OpenChatRooms.Add(new()
+            {
+                ChatRoomId = room.Id,
+                Visibility = "PUBLIC",
+                MaxMemberCount = 100,
+                Status = "ACTIVE",
+                CreatedAt = Now,
+                UpdatedAt = Now
+            });
         await db.SaveChangesAsync();
         if (type == "OPEN")
         {
@@ -539,17 +659,29 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
         public Task ValidateAvailabilityAsync(IReadOnlyList<ChatMessageIntent> intents, CancellationToken token) => Task.CompletedTask;
         public Task DeliverAsync(ChatMessageIntent intent, CancellationToken token) => Task.CompletedTask;
     }
-    private sealed class Tokens : IChatCoreAccessTokenProvider { public string CreateToken(string scope) => "synthetic-service-token"; }
+    private sealed class Tokens : IChatCoreAccessTokenProvider
+    {
+        public string CreateToken(string scope) => "synthetic-service-token";
+    }
     private static HttpChatCoreClient Core(CoreHandler handler) => new(new HttpClient(handler), new(new Uri("http://127.0.0.1:1"), TimeSpan.FromSeconds(2)), new Tokens());
     private sealed class CoreHandler(bool blocked) : HttpMessageHandler
     {
         public bool Blocked { get; set; } = blocked;
-        public long? OnlyBlockedRecipient { get; set; }
-        public bool PauseRelations { get; set; }
+        public long? OnlyBlockedRecipient
+        {
+            get; set;
+        }
+        public bool PauseRelations
+        {
+            get; set;
+        }
         public TaskCompletionSource RelationReached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource RelationResume { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool StorageAvailable { get; set; } = true;
-        public int StorageCalls { get; private set; }
+        public int StorageCalls
+        {
+            get; private set;
+        }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
             if (request.Method == HttpMethod.Delete)
@@ -565,8 +697,15 @@ public sealed partial class SafetyPersistenceTests(ChatMySqlFixture fixture)
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(token));
             var ids = body.RootElement.GetProperty("targetUserIds").EnumerateArray().Select(value => value.GetInt64()).ToArray();
             bool isBlocked = Blocked && (OnlyBlockedRecipient is null || body.RootElement.GetProperty("requesterUserId").GetInt64() == OnlyBlockedRecipient);
-            string json = JsonSerializer.Serialize(new { relations = ids.Select(id => new { targetUserId = id, friends = false, blocked = isBlocked, friendStatus = isBlocked ? "BLOCKED" : "NONE" }), missingUserIds = Array.Empty<long>() });
-            return new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+            string json = JsonSerializer.Serialize(new
+            {
+                relations = ids.Select(id => new { targetUserId = id, friends = false, blocked = isBlocked, friendStatus = isBlocked ? "BLOCKED" : "NONE" }),
+                missingUserIds = Array.Empty<long>()
+            });
+            return new(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            };
         }
     }
 }

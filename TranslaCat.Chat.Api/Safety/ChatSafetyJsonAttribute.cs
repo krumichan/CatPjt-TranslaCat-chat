@@ -10,20 +10,31 @@ public sealed class ChatSafetyJsonAttribute : Attribute, IAsyncResourceFilter, I
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
         var request = context.HttpContext.Request;
-        if (HttpMethods.IsGet(request.Method)) { await next(); return; }
+        if (HttpMethods.IsGet(request.Method))
+        {
+            await next();
+            return;
+        }
         request.EnableBuffering(16 * 1024, 16 * 1024);
         try
         {
             // 제한된 JSON을 한 번 확인하고 model binder가 같은 원문을 읽게 되돌린다.
-            using var document = await JsonDocument.ParseAsync(request.Body, new() { MaxDepth = 8 }, context.HttpContext.RequestAborted);
-            if (document.RootElement.ValueKind != JsonValueKind.Object || !Unique(document.RootElement)) throw new JsonException();
+            using var document = await JsonDocument.ParseAsync(request.Body, new()
+            {
+                MaxDepth = 8
+            }, context.HttpContext.RequestAborted);
+            if (document.RootElement.ValueKind != JsonValueKind.Object || !Unique(document.RootElement))
+                throw new JsonException();
             request.Body.Position = 0;
         }
         catch (OperationCanceledException) when (context.HttpContext.RequestAborted.IsCancellationRequested) { throw; }
         catch (Exception exception) when (exception is JsonException or IOException)
         {
             context.HttpContext.Response.Headers.CacheControl = "no-store";
-            context.Result = new BadRequestObjectResult(new { code = "CHAT_SAFETY_INVALID_JSON" });
+            context.Result = new BadRequestObjectResult(new
+            {
+                code = "CHAT_SAFETY_INVALID_JSON"
+            });
             return;
         }
         await next();

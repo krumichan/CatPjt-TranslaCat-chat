@@ -54,14 +54,20 @@ public sealed class EfOpenInvitationStore(IDbContextFactory<ChatDbContext> conte
             $"SELECT * FROM open_chat_room WHERE chat_room_id = {roomId} FOR UPDATE").SingleOrDefaultAsync(token);
         var room = await db.ChatRooms.SingleOrDefaultAsync(row => row.Id == roomId && row.Active && row.DeletedAt == null
             && row.RoomType == "OPEN", token);
-        if (open is null || room is null) throw Error("초대할 OPEN 채팅방을 찾을 수 없습니다.", "NOT_ALLOWED");
-        if (open.Status != "ACTIVE") throw Error("종료된 채팅방에는 초대할 수 없습니다.", "ROOM_CLOSED");
+        if (open is null || room is null)
+            throw Error("초대할 OPEN 채팅방을 찾을 수 없습니다.", "NOT_ALLOWED");
+        if (open.Status != "ACTIVE")
+            throw Error("종료된 채팅방에는 초대할 수 없습니다.", "ROOM_CLOSED");
 
         // 링크 공유와 같은 활성 사람 참여자 권한이며, 방 전용 신원만 공개 payload에 사용한다.
         var sender = await (from member in db.ChatRoomMembers
                             join profile in db.OpenChatMemberProfiles on member.Id equals profile.ChatRoomMemberId
                             where member.ChatRoomId == roomId && member.UserId == userId && member.Active && member.DeletedAt == null
-                            select new { Member = member, Profile = profile }).SingleOrDefaultAsync(token);
+                            select new
+                            {
+                                Member = member,
+                                Profile = profile
+                            }).SingleOrDefaultAsync(token);
         if (sender is null || await db.OpenChatBans.AnyAsync(row => row.ChatRoomId == roomId
             && row.TargetUserId == userId && row.ReleasedAt == null, token))
             throw Error("현재 참여한 채팅방에서만 초대할 수 있습니다.", "MEMBER_ACCESS_DENIED");
@@ -71,7 +77,8 @@ public sealed class EfOpenInvitationStore(IDbContextFactory<ChatDbContext> conte
             || await db.OpenChatBans.AnyAsync(row => row.ChatRoomId == roomId && row.TargetUserId == target.Id && row.ReleasedAt == null, token)
             || await db.ChatRoomMembers.AnyAsync(row => row.ChatRoomId == roomId && row.UserId == target.Id && row.Active && row.DeletedAt == null, token))
             throw Error("해당 대상으로 초대를 보낼 수 없습니다.", "TARGET_UNAVAILABLE");
-        if (policy is not null) ChatAccountWriteGate.RequireHeld(db, target.Id);
+        if (policy is not null)
+            ChatAccountWriteGate.RequireHeld(db, target.Id);
         var actor = await directory.FindByIdAsync(userId, token) ?? throw new OpenInvitationDependencyUnavailableException();
 
         // 잠금과 Core 조회를 기다린 뒤 현재 시각을 한 번 읽는다. 대기 전 시각으로 rate/TTL을 계산하지 않는다.
@@ -88,10 +95,22 @@ public sealed class EfOpenInvitationStore(IDbContextFactory<ChatDbContext> conte
         await delivery.ValidateAvailabilityAsync(token);
         var notification = new ChatNotificationEntity
         {
-            RecipientUserId = target.Id, NotificationType = "CHAT_INVITATION", ChatRoomId = roomId, ActorUserId = userId,
-            SourceEventKey = sourceKey, CreatedAt = now, CreatedBy = actor.Email,
-            PayloadJson = JsonSerializer.Serialize(new { schemaVersion = 1, invitationKind = "OPEN_LINK", roomType = "OPEN",
-                roomName = room.Name, inviterOpenNickname = sender.Profile.Nickname, inviterMemberCode = sender.Profile.MemberCode }, Json)
+            RecipientUserId = target.Id,
+            NotificationType = "CHAT_INVITATION",
+            ChatRoomId = roomId,
+            ActorUserId = userId,
+            SourceEventKey = sourceKey,
+            CreatedAt = now,
+            CreatedBy = actor.Email,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                schemaVersion = 1,
+                invitationKind = "OPEN_LINK",
+                roomType = "OPEN",
+                roomName = room.Name,
+                inviterOpenNickname = sender.Profile.Nickname,
+                inviterMemberCode = sender.Profile.MemberCode
+            }, Json)
         };
         db.ChatNotifications.Add(notification);
         await db.SaveChangesAsync(token);
@@ -99,15 +118,23 @@ public sealed class EfOpenInvitationStore(IDbContextFactory<ChatDbContext> conte
         // 초대 메시지·푸시 의도·rate gate는 같은 commit을 공유한다. 기존 메시지 outbox에는 가짜 메시지를 넣지 않는다.
         db.OpenInvitationPushOutbox.Add(new OpenInvitationPushOutboxEntity
         {
-            NotificationId = notification.Id, RoomId = roomId, SenderUserId = userId, RecipientUserId = target.Id,
-            EventId = Guid.NewGuid().ToString("D"), CreatedAtUtc = utcNow, DueAtUtc = utcNow
+            NotificationId = notification.Id,
+            RoomId = roomId,
+            SenderUserId = userId,
+            RecipientUserId = target.Id,
+            EventId = Guid.NewGuid().ToString("D"),
+            CreatedAtUtc = utcNow,
+            DueAtUtc = utcNow
         });
         gate.TouchedAtUtc = utcNow;
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
 
         // queue는 commit 뒤의 실시간 힌트다. 실패해도 저장된 카드/푸시를 재생성하지 않고 REST로 복원한다.
-        try { await delivery.DeliverAsync(target.Email, Activity(notification), now, CancellationToken.None); }
+        try
+        {
+            await delivery.DeliverAsync(target.Email, Activity(notification), now, CancellationToken.None);
+        }
         catch (Exception error) { logger.LogWarning("OPEN invitation realtime delivery failed. Failure={FailureType}", error.GetType().Name); }
         return new(notification.Id, roomId, notification.CreatedAt, false);
     }

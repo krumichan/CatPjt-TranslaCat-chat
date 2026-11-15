@@ -26,7 +26,8 @@ public sealed partial class EfOpenModerationStore(
         long? targetAccount = policy is null ? null : await context.ChatRoomMembers.AsNoTracking()
             .Where(row => row.ChatRoomId == roomId && row.Id == memberId).Select(row => (long?)row.UserId).SingleOrDefaultAsync(token);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
-        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context,
+        if (policy is not null)
+            await ChatAccountWriteGate.AcquireAsync(context,
             targetAccount is null ? [actorId] : new[] { actorId, targetAccount.Value }, token);
         var room = await LockRoomAsync(context, roomId, token);
         var actor = await LockActorAsync(context, actorId, roomId, token);
@@ -36,7 +37,8 @@ public sealed partial class EfOpenModerationStore(
         }
 
         var target = await LockTargetAsync(context, memberId, roomId, token);
-        if (policy is not null) ChatAccountWriteGate.RequireHeld(context, target.UserId);
+        if (policy is not null)
+            ChatAccountWriteGate.RequireHeld(context, target.UserId);
         if (assign && (actor.Id == target.Id || target.Role != "MEMBER"
             || await context.OpenChatBans.AnyAsync(ban => ban.ChatRoomId == roomId && ban.TargetUserId == target.UserId && ban.ReleasedAt == null, token)))
         {
@@ -72,13 +74,15 @@ public sealed partial class EfOpenModerationStore(
         long? targetAccount = policy is null ? null : await context.ChatRoomMembers.AsNoTracking()
             .Where(row => row.ChatRoomId == roomId && row.Id == memberId).Select(row => (long?)row.UserId).SingleOrDefaultAsync(token);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
-        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context,
+        if (policy is not null)
+            await ChatAccountWriteGate.AcquireAsync(context,
             targetAccount is null ? [actorId] : new[] { actorId, targetAccount.Value }, token);
         var room = await LockRoomAsync(context, roomId, token);
         var actor = await LockActorAsync(context, actorId, roomId, token);
         OpenModerationPolicy.ValidateModerator(actor.Role);
         var target = await LockTargetAsync(context, memberId, roomId, token);
-        if (policy is not null) ChatAccountWriteGate.RequireHeld(context, target.UserId);
+        if (policy is not null)
+            ChatAccountWriteGate.RequireHeld(context, target.UserId);
         OpenModerationPolicy.ValidateBanTarget(actor.Id, actor.Role, target.Id, target.Role);
         if (await context.OpenChatBans.AnyAsync(ban => ban.ChatRoomId == roomId && ban.TargetUserId == target.UserId && ban.ReleasedAt == null, token))
         {
@@ -153,7 +157,8 @@ public sealed partial class EfOpenModerationStore(
         long? targetAccount = policy is null ? null : await context.OpenChatBans.AsNoTracking()
             .Where(row => row.ChatRoomId == roomId && row.Id == banId).Select(row => (long?)row.TargetUserId).SingleOrDefaultAsync(token);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
-        if (policy is not null) await ChatAccountWriteGate.AcquireAsync(context,
+        if (policy is not null)
+            await ChatAccountWriteGate.AcquireAsync(context,
             targetAccount is null ? [actorId] : new[] { actorId, targetAccount.Value }, token);
         await LockRoomAsync(context, roomId, token);
         var actor = await LockActorAsync(context, actorId, roomId, token);

@@ -6,21 +6,48 @@ namespace TranslaCat.Chat.Infrastructure.Safety;
 // 재가입 방지용 실제 계정 ID만 내부에 남긴다. 이름/이메일/본문/프로필은 복제하지 않는다.
 public sealed class ChatAccountDeletionEntity
 {
-    public long UserId { get; set; }
+    public long UserId
+    {
+        get; set;
+    }
     public string OperationId { get; set; } = null!;
-    public DateTime RequestedAtUtc { get; set; }
-    public DateTime? LocalCompletedAtUtc { get; set; }
-    public DateTime? CompletedAtUtc { get; set; }
+    public DateTime RequestedAtUtc
+    {
+        get; set;
+    }
+    public DateTime? LocalCompletedAtUtc
+    {
+        get; set;
+    }
+    public DateTime? CompletedAtUtc
+    {
+        get; set;
+    }
 }
 
 public sealed class ChatAccountDeletionObjectEntity
 {
-    public long Id { get; set; }
-    public long UserId { get; set; }
+    public long Id
+    {
+        get; set;
+    }
+    public long UserId
+    {
+        get; set;
+    }
     public string ObjectKey { get; set; } = null!;
-    public int Attempts { get; set; }
-    public DateTime DueAtUtc { get; set; }
-    public DateTime? CompletedAtUtc { get; set; }
+    public int Attempts
+    {
+        get; set;
+    }
+    public DateTime DueAtUtc
+    {
+        get; set;
+    }
+    public DateTime? CompletedAtUtc
+    {
+        get; set;
+    }
 }
 
 internal sealed class ChatAccountDeletionConfiguration : IEntityTypeConfiguration<ChatAccountDeletionEntity>

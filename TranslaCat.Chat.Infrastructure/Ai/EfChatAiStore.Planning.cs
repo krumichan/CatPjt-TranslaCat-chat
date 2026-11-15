@@ -29,7 +29,8 @@ public sealed partial class EfChatAiStore(
         {
             return [];
         }
-        if (contentPolicy is not null) await contentPolicy.RequireActiveAsync(trigger.SenderUserId.Value, cancellationToken);
+        if (contentPolicy is not null)
+            await contentPolicy.RequireActiveAsync(trigger.SenderUserId.Value, cancellationToken);
 
         // 잠금 전 조회로 REPEATABLE READ snapshot을 고정하지 않는다. 잠금 대기 중 변경된 권한/설정을 읽는다.
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -202,7 +203,11 @@ public sealed partial class EfChatAiStore(
             : [];
         foreach (long userId in uniqueUsers)
         {
-            if (deletedUsers.Contains(userId)) { resolvedNames[userId] = "탈퇴한 사용자"; continue; }
+            if (deletedUsers.Contains(userId))
+            {
+                resolvedNames[userId] = "탈퇴한 사용자";
+                continue;
+            }
             string? nickname = openNames.GetValueOrDefault(userId);
             if (ChatMessageText.IsBlank(nickname))
             {

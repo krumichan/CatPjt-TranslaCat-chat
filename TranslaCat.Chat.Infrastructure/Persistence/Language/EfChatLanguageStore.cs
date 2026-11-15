@@ -83,7 +83,8 @@ public sealed class EfChatLanguageStore(
 
         private Task FenceAsync(long userId, CancellationToken token)
         {
-            if (!fenced || context.LockedSafetyAccounts.Contains(userId)) return Task.CompletedTask;
+            if (!fenced || context.LockedSafetyAccounts.Contains(userId))
+                return Task.CompletedTask;
             return ChatAccountWriteGate.AcquireAsync(context, [userId], token);
         }
 

@@ -41,7 +41,7 @@ public sealed class ChatNotificationPreferenceHttpTests
         await using var host = await PreferenceHost.StartAsync();
 
         // 실행
-        using var put = await host.SendAsync("PUT", path, JsonSerializer.Serialize(new Dictionary<string,bool> { [field] = value }));
+        using var put = await host.SendAsync("PUT", path, JsonSerializer.Serialize(new Dictionary<string, bool> { [field] = value }));
         using var get = await host.SendAsync("GET", path);
         var body = (await ReadHttpFixture.ReadJsonAsync(get)).GetProperty("body");
 
@@ -51,7 +51,8 @@ public sealed class ChatNotificationPreferenceHttpTests
         Assert.Equal(value, body.GetProperty(field).GetBoolean());
         Assert.Equal(73, host.Store.Actor);
         Assert.False(body.TryGetProperty("userId", out _));
-        if (field == "muted") Assert.Equal(41, body.GetProperty("roomId").GetInt64());
+        if (field == "muted")
+            Assert.Equal(41, body.GetProperty("roomId").GetInt64());
     }
 
     [Theory]
@@ -136,26 +137,60 @@ internal sealed class PreferenceHost(WebApplication application, HttpClient clie
     public async Task<HttpResponseMessage> SendAsync(string method, string path, string? body = null, bool authenticated = true)
     {
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-        if (authenticated) request.Headers.Add(TestReadAuthenticationHandler.HeaderName, "73");
+        if (body is not null)
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        if (authenticated)
+            request.Headers.Add(TestReadAuthenticationHandler.HeaderName, "73");
         return await client.SendAsync(request);
     }
-    public async ValueTask DisposeAsync() { client.Dispose(); await application.StopAsync(); await application.DisposeAsync(); }
+    public async ValueTask DisposeAsync()
+    {
+        client.Dispose();
+        await application.StopAsync();
+        await application.DisposeAsync();
+    }
 }
 
 internal sealed class PreferenceMemoryStore : IChatNotificationPreferenceStore
 {
-    public int Calls { get; private set; }
-    public long Actor { get; private set; }
-    public bool Missing { get; set; }
+    public int Calls
+    {
+        get; private set;
+    }
+    public long Actor
+    {
+        get; private set;
+    }
+    public bool Missing
+    {
+        get; set;
+    }
     private bool enabled = true;
     private bool muted;
     public Task<ChatNotificationPreference> GetAsync(long userId, CancellationToken token)
-    { Calls++; Actor = userId; return Task.FromResult(new ChatNotificationPreference(enabled)); }
+    {
+        Calls++;
+        Actor = userId;
+        return Task.FromResult(new ChatNotificationPreference(enabled));
+    }
     public Task<ChatNotificationPreference> PutAsync(long userId, bool pushEnabled, CancellationToken token)
-    { Calls++; Actor = userId; enabled = pushEnabled; return Task.FromResult(new ChatNotificationPreference(enabled)); }
+    {
+        Calls++;
+        Actor = userId;
+        enabled = pushEnabled;
+        return Task.FromResult(new ChatNotificationPreference(enabled));
+    }
     public Task<ChatRoomNotificationPreference?> GetRoomAsync(long userId, long roomId, CancellationToken token)
-    { Calls++; Actor = userId; return Task.FromResult(Missing ? null : new ChatRoomNotificationPreference(roomId, muted)); }
+    {
+        Calls++;
+        Actor = userId;
+        return Task.FromResult(Missing ? null : new ChatRoomNotificationPreference(roomId, muted));
+    }
     public Task<ChatRoomNotificationPreference?> PutRoomAsync(long userId, long roomId, bool value, CancellationToken token)
-    { Calls++; Actor = userId; muted = value; return Task.FromResult(Missing ? null : new ChatRoomNotificationPreference(roomId, muted)); }
+    {
+        Calls++;
+        Actor = userId;
+        muted = value;
+        return Task.FromResult(Missing ? null : new ChatRoomNotificationPreference(roomId, muted));
+    }
 }

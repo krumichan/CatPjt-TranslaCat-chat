@@ -21,7 +21,8 @@ public sealed class EfChatRoomStore(
         await directory.EnsureUserExistsAsync(userId, cancellationToken);
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
-        if (contentPolicy is not null) await ChatAccountWriteGate.AcquireAsync(context,
+        if (contentPolicy is not null)
+            await ChatAccountWriteGate.AcquireAsync(context,
             distinctMembers.Where(id => id != null).Select(id => id!.Value).Prepend(userId), cancellationToken);
 
         // 원본처럼 MANUAL DIRECT만 재사용하며 정확히 활성 회원 두 명인 가장 이른 방을 선택한다.

@@ -49,7 +49,10 @@ public sealed class ChatNotificationPreferenceController(ChatNotificationPrefere
 
 public sealed class ChatNotificationPreferenceHttpBoundaryAttribute : ActionFilterAttribute, IExceptionFilter
 {
-    public ChatNotificationPreferenceHttpBoundaryAttribute() { Order = -3200; }
+    public ChatNotificationPreferenceHttpBoundaryAttribute()
+    {
+        Order = -3200;
+    }
     public override void OnActionExecuting(ActionExecutingContext context)
     {
         if (!context.ModelState.IsValid)
@@ -58,7 +61,8 @@ public sealed class ChatNotificationPreferenceHttpBoundaryAttribute : ActionFilt
 
     public void OnException(ExceptionContext context)
     {
-        if (context.Exception is OperationCanceledException && context.HttpContext.RequestAborted.IsCancellationRequested) return;
+        if (context.Exception is OperationCanceledException && context.HttpContext.RequestAborted.IsCancellationRequested)
+            return;
         var (status, code) = context.Exception switch
         {
             ChatNotificationPreferenceException error => (400, error.Code),
@@ -72,7 +76,10 @@ public sealed class ChatNotificationPreferenceHttpBoundaryAttribute : ActionFilt
 
     private static ObjectResult Error(HttpContext context, int status, string code) => new(
         context.RequestServices.GetRequiredService<ChatReadHttpResponses>().Error(context, status, code,
-            "알림 설정을 처리하지 못했습니다.")) { StatusCode = status };
+            "알림 설정을 처리하지 못했습니다."))
+    {
+        StatusCode = status
+    };
 }
 
 public static class ChatNotificationPreferenceHttpExtensions

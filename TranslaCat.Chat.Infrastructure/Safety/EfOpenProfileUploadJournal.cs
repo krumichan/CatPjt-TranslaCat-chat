@@ -13,16 +13,21 @@ public sealed class EfOpenProfileUploadJournal(IDbContextFactory<ChatDbContext> 
     public async Task StartAsync(long userId, long memberId, string newKey, string? previousKey, CancellationToken token)
     {
         Validate(userId, memberId, newKey, ownMember: true);
-        if (previousKey is not null) Validate(userId, memberId, previousKey);
+        if (previousKey is not null)
+            Validate(userId, memberId, previousKey);
 
         // 부모가 가진 user gate를 여기서 다시 얻지 않는다. FK도 없으므로 부모 row lock과 역순 대기하지 않는다.
         await using var db = await contexts.CreateDbContextAsync(token);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
-        if (previousKey is not null) await TrackExistingWithinAsync(db, userId, memberId, previousKey, token);
+        if (previousKey is not null)
+            await TrackExistingWithinAsync(db, userId, memberId, previousKey, token);
         db.ChatOpenProfileUploadIntents.Add(new()
         {
-            UserId = userId, MemberId = memberId, ObjectKey = newKey,
-            CreatedAtUtc = time.GetUtcNow().UtcDateTime, NextAttemptAtUtc = time.GetUtcNow().UtcDateTime
+            UserId = userId,
+            MemberId = memberId,
+            ObjectKey = newKey,
+            CreatedAtUtc = time.GetUtcNow().UtcDateTime,
+            NextAttemptAtUtc = time.GetUtcNow().UtcDateTime
         });
         await db.SaveChangesAsync(token);
         await tx.CommitAsync(token);
@@ -62,7 +67,8 @@ public sealed class EfOpenProfileUploadJournal(IDbContextFactory<ChatDbContext> 
             : await db.ChatOpenProfileUploadIntents.Where(row => row.UserId == userId && row.ObjectKey == key && row.PutConfirmedAtUtc == null)
                 .ExecuteUpdateAsync(update => update.SetProperty(row => row.State, "PUT_UNCERTAIN")
                     .SetProperty(row => row.NextAttemptAtUtc, now), token);
-        if (confirmed && changed != 1) throw new InvalidOperationException("OPEN image intent acknowledgement is missing.");
+        if (confirmed && changed != 1)
+            throw new InvalidOperationException("OPEN image intent acknowledgement is missing.");
     }
 
     public async Task ProcessDueAsync(long? userId, CancellationToken token)
@@ -79,14 +85,16 @@ public sealed class EfOpenProfileUploadJournal(IDbContextFactory<ChatDbContext> 
             await ChatAccountWriteGate.AcquireAsync(db, [candidate.UserId], token, deletion: true);
             var row = await db.ChatOpenProfileUploadIntents.FromSqlInterpolated(
                 $"SELECT * FROM chat_open_profile_upload_intent WHERE id={candidate.Id} FOR UPDATE").SingleOrDefaultAsync(token);
-            if (row is null || row.NextAttemptAtUtc is null || row.NextAttemptAtUtc > time.GetUtcNow().UtcDateTime) continue;
+            if (row is null || row.NextAttemptAtUtc is null || row.NextAttemptAtUtc > time.GetUtcNow().UtcDateTime)
+                continue;
 
             bool referenced = await IsReferencedAsync(db, row.ObjectKey, token);
             bool deleted = await db.ChatAccountDeletions.AnyAsync(value => value.UserId == row.UserId, token);
             if (referenced)
             {
                 // 공유 AI avatar/다른 사람 참조는 개인 삭제 대상이 아니다. 활성 개인 참조는 다음 교체까지 보존한다.
-                if (deleted) db.ChatOpenProfileUploadIntents.Remove(row);
+                if (deleted)
+                    db.ChatOpenProfileUploadIntents.Remove(row);
                 else
                 {
                     row.State = "PUT_CONFIRMED";

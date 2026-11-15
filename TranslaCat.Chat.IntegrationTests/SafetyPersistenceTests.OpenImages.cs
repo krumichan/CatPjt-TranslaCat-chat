@@ -192,8 +192,15 @@ public sealed partial class SafetyPersistenceTests
 
         // 실행: 타 참여자와 AI의 공유 참조가 남는 경우 개인 연결만 없애고 객체는 보존한다.
         (await db.OpenChatMemberProfiles.SingleAsync(row => row.ChatRoomMemberId == seed.OtherMemberId)).ProfileImageObjectKey = key;
-        db.ChatAiAgents.Add(new ChatAiAgentEntity { Nickname = "공유 AI", PersonaPrompt = "synthetic", OriginalLanguageCode = "ko",
-            ProfileImageObjectKey = key, CreatedAt = Now, UpdatedAt = Now });
+        db.ChatAiAgents.Add(new ChatAiAgentEntity
+        {
+            Nickname = "공유 AI",
+            PersonaPrompt = "synthetic",
+            OriginalLanguageCode = "ko",
+            ProfileImageObjectKey = key,
+            CreatedAt = Now,
+            UpdatedAt = Now
+        });
         await db.SaveChangesAsync();
         var deletion = ImageDeletion(handler, clock, journal);
         Assert.Equal("COMPLETED", (await deletion.DeleteAsync(seed.UserId, ImageOperation(), default)).Status);
@@ -253,7 +260,8 @@ public sealed partial class SafetyPersistenceTests
         {
             Assert.Equal(HttpMethod.Delete, request.Method);
             using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(token));
-            if (!Available) return new(HttpStatusCode.ServiceUnavailable);
+            if (!Available)
+                return new(HttpStatusCode.ServiceUnavailable);
             Deleted.Add(json.RootElement.GetProperty("objectKey").GetString()!);
             return new(HttpStatusCode.NoContent);
         }
@@ -261,20 +269,38 @@ public sealed partial class SafetyPersistenceTests
     private sealed class JournalPorts : IOpenProfileStorage, IChatProfileImageObjectStore, IChatRoomAccountReader, IOpenProfileEventDelivery
     {
         public bool IsConfigured => true;
-        public bool PausePut { get; init; }
-        public bool FailPut { get; init; }
-        public bool FailProjection { get; init; }
-        public string? NewKey { get; private set; }
-        public Func<string, Task>? BeforePut { get; set; }
+        public bool PausePut
+        {
+            get; init;
+        }
+        public bool FailPut
+        {
+            get; init;
+        }
+        public bool FailProjection
+        {
+            get; init;
+        }
+        public string? NewKey
+        {
+            get; private set;
+        }
+        public Func<string, Task>? BeforePut
+        {
+            get; set;
+        }
         public TaskCompletionSource PutReached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource PutResume { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async Task StoreAsync(string key, string type, ReadOnlyMemory<byte> bytes, CancellationToken token)
         {
-            if (BeforePut is not null) await BeforePut(key);
+            if (BeforePut is not null)
+                await BeforePut(key);
             NewKey = key;
             PutReached.TrySetResult();
-            if (PausePut) await PutResume.Task.WaitAsync(token);
-            if (FailPut) throw new IOException("Synthetic unknown PUT response.");
+            if (PausePut)
+                await PutResume.Task.WaitAsync(token);
+            if (FailPut)
+                throw new IOException("Synthetic unknown PUT response.");
         }
         public Task<string?> ResolveUrlAsync(string key, CancellationToken token)
             => FailProjection ? throw new IOException("Synthetic projection failure after PUT ACK.") : Task.FromResult<string?>("https://synthetic.example.invalid/" + key);

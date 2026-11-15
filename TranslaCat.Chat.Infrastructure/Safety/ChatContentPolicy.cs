@@ -22,7 +22,8 @@ public sealed class ChatContentPolicy(IDbContextFactory<ChatDbContext> contexts,
     {
         await RequireActiveAsync(userId, token);
         long[] ids = senderIds.Distinct().ToArray();
-        if (ids.Any(id => id <= 0)) throw new ChatCoreUnavailableException();
+        if (ids.Any(id => id <= 0))
+            throw new ChatCoreUnavailableException();
 
         await using var db = await contexts.CreateDbContextAsync(token);
         var deleted = await db.ChatAccountDeletions.AsNoTracking().Where(row => ids.Contains(row.UserId))
@@ -49,7 +50,11 @@ public sealed class ChatContentPolicy(IDbContextFactory<ChatDbContext> contexts,
         await RequireActiveAsync(userId, token);
         var deletedAfterLookup = await db.ChatAccountDeletions.AsNoTracking().Where(row => ids.Contains(row.UserId))
             .Select(row => row.UserId).ToListAsync(token);
-        foreach (long id in deletedAfterLookup) results[id] = results[id] with { AuthorDeleted = true };
+        foreach (long id in deletedAfterLookup)
+            results[id] = results[id] with
+            {
+                AuthorDeleted = true
+            };
 
         return results;
     }
@@ -69,9 +74,11 @@ public sealed class ChatContentPolicy(IDbContextFactory<ChatDbContext> contexts,
                     && db.ChatRoomMembers.Any(member => member.ChatRoomId == message.ChatRoomId && member.UserId == userId
                         && member.Active && member.DeletedAt == null && member.JoinedAt <= message.CreatedAt))
                 .Select(message => message.SenderUserId!.Value).Distinct().Order().Take(100).ToArrayAsync(token);
-            if (candidates.Length == 0) break;
+            if (candidates.Length == 0)
+                break;
             var policy = await ResolveAsync(userId, candidates, token);
-            foreach (var entry in policy.Where(entry => entry.Value.Blocked)) blocked.Add(entry.Key);
+            foreach (var entry in policy.Where(entry => entry.Value.Blocked))
+                blocked.Add(entry.Key);
             cursor = candidates[^1];
         }
         return blocked;

@@ -70,10 +70,12 @@ public sealed partial class EfChatMessageTransaction(
         public async Task<ChatMessageMember> GetMemberAsync(
             long userId, long roomId, bool forSend, CancellationToken cancellationToken)
         {
-            if (contentPolicy is not null) await contentPolicy.RequireActiveAsync(userId, cancellationToken);
+            if (contentPolicy is not null)
+                await contentPolicy.RequireActiveAsync(userId, cancellationToken);
             if (forSend)
             {
-                if (contentPolicy is not null) await ChatAccountWriteGate.AcquireAsync(context, [userId], cancellationToken);
+                if (contentPolicy is not null)
+                    await ChatAccountWriteGate.AcquireAsync(context, [userId], cancellationToken);
                 // 변경 요청은 최초 snapshot 전에 OPEN lifecycle → room → membership 순서로 잠근다.
                 // 종료/차단/탈퇴 commit 뒤 과거 snapshot으로 새 메시지를 쓰는 경합을 막는다.
                 await context.OpenChatRooms.FromSqlInterpolated(

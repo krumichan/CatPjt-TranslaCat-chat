@@ -22,7 +22,8 @@ public sealed class ChatPushPersistenceTests(ChatMySqlFixture fixture)
         var room = await fixture.SeedReadRoomAsync(type);
         long recipient = room.UserId + 1;
         await SeedRecipientAsync(room, recipient);
-        if (type == "OPEN") await SeedOpenAsync(room);
+        if (type == "OPEN")
+            await SeedOpenAsync(room);
         var transaction = Transaction();
 
         // 실행
@@ -121,10 +122,19 @@ public sealed class ChatPushPersistenceTests(ChatMySqlFixture fixture)
         message.DeletedAt = null;
         db.OpenChatBans.Add(new OpenChatBanEntity
         {
-            ChatRoomId = room.RoomId, TargetUserId = room.UserId, TargetChatRoomMemberId = room.MemberId,
-            TargetMemberCode = "synthetic_member", NicknameSnapshot = "synthetic", LastJoinedAtSnapshot = member.JoinedAt,
-            TargetRoleSnapshot = "MEMBER", BannedByMemberId = room.MemberId, BannedByRole = "OWNER",
-            BannedAt = ChatMySqlFixture.Epoch, Reason = "synthetic", CreatedAt = ChatMySqlFixture.Epoch, UpdatedAt = ChatMySqlFixture.Epoch
+            ChatRoomId = room.RoomId,
+            TargetUserId = room.UserId,
+            TargetChatRoomMemberId = room.MemberId,
+            TargetMemberCode = "synthetic_member",
+            NicknameSnapshot = "synthetic",
+            LastJoinedAtSnapshot = member.JoinedAt,
+            TargetRoleSnapshot = "MEMBER",
+            BannedByMemberId = room.MemberId,
+            BannedByRole = "OWNER",
+            BannedAt = ChatMySqlFixture.Epoch,
+            Reason = "synthetic",
+            CreatedAt = ChatMySqlFixture.Epoch,
+            UpdatedAt = ChatMySqlFixture.Epoch
         });
         await db.SaveChangesAsync();
         Assert.False(await store.EligibleAsync(job, default));
@@ -169,14 +179,24 @@ public sealed class ChatPushPersistenceTests(ChatMySqlFixture fixture)
         var old = Assert.Single(claims.OfType<ChatPushDeliveryEntity>());
 
         // 실행
-        Assert.True(await store.RefreshTargetAsync(old, Target() with { Generation = 2 }, default));
-        Assert.False(await store.RefreshTargetAsync(old, Target() with { Generation = 3, TokenVersion = 2 }, default));
+        Assert.True(await store.RefreshTargetAsync(old, Target() with
+        {
+            Generation = 2
+        }, default));
+        Assert.False(await store.RefreshTargetAsync(old, Target() with
+        {
+            Generation = 3,
+            TokenVersion = 2
+        }, default));
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE chat_push_delivery SET lease_expires_at_utc = TIMESTAMPADD(SECOND,-1,UTC_TIMESTAMP(6)) WHERE id = {deliveryId}");
         var current = Assert.IsType<ChatPushDeliveryEntity>(await store.ClaimDeliveryAsync(deliveryId, default));
 
         // 검증
         Assert.False(await store.FinishDeliveryAsync(old, "RECEIPT", 900, "stale-ticket", true, default));
-        Assert.False(await store.RefreshTargetAsync(old, Target() with { Generation = 3 }, default));
+        Assert.False(await store.RefreshTargetAsync(old, Target() with
+        {
+            Generation = 3
+        }, default));
         Assert.True(await store.FinishDeliveryAsync(current, "RECEIPT", 900, "current-ticket", true, default));
         var stored = await db.ChatPushDeliveries.AsNoTracking().SingleAsync(row => row.Id == deliveryId);
         Assert.Equal(2, stored.Generation);
@@ -280,7 +300,8 @@ public sealed class ChatPushPersistenceTests(ChatMySqlFixture fixture)
                 ORDER BY t.TABLE_NAME
                 """;
             await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync()) tables.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+            while (await reader.ReadAsync())
+                tables.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
         }
         await using (var command = db.Database.GetDbConnection().CreateCommand())
         {
@@ -292,13 +313,18 @@ public sealed class ChatPushPersistenceTests(ChatMySqlFixture fixture)
                 ORDER BY TABLE_NAME, COLUMN_NAME
                 """;
             await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync()) columns.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+            while (await reader.ReadAsync())
+                columns.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
         }
 
         // 실행 근거는 assertion 전에 남겨 실제 provider DDL 불일치도 숨기지 않는다.
         var manifest = Environment.GetEnvironmentVariable("CHAT_TEST_MANIFEST")!;
         string evidence = Path.Combine(Path.GetDirectoryName(manifest)!, "actual-push-schema-metadata.json");
-        await File.WriteAllTextAsync(evidence, JsonSerializer.Serialize(new { tables, columns }, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
+        await File.WriteAllTextAsync(evidence, JsonSerializer.Serialize(new
+        {
+            tables,
+            columns
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
 
         // 검증: lease_token은 두 테이블에 있으므로 이름 다섯 종류가 실제 column 여섯 개다.
         Assert.Equal(2, tables.Count);
@@ -332,22 +358,49 @@ public sealed class ChatPushPersistenceTests(ChatMySqlFixture fixture)
     private async Task SeedRecipientAsync(SeededReadRoom room, long userId)
     {
         await using var db = await fixture.Contexts.CreateDbContextAsync();
-        db.ChatRoomMembers.Add(new() { ChatRoomId = room.RoomId, UserId = userId, Role = "MEMBER", JoinedAt = ChatMySqlFixture.Epoch,
-            CreatedAt = ChatMySqlFixture.Epoch, UpdatedAt = ChatMySqlFixture.Epoch });
+        db.ChatRoomMembers.Add(new()
+        {
+            ChatRoomId = room.RoomId,
+            UserId = userId,
+            Role = "MEMBER",
+            JoinedAt = ChatMySqlFixture.Epoch,
+            CreatedAt = ChatMySqlFixture.Epoch,
+            UpdatedAt = ChatMySqlFixture.Epoch
+        });
         await db.SaveChangesAsync();
     }
     private async Task SeedOpenAsync(SeededReadRoom room)
     {
         await using var db = await fixture.Contexts.CreateDbContextAsync();
-        db.OpenChatRooms.Add(new() { ChatRoomId = room.RoomId, Visibility = "PUBLIC", MaxMemberCount = 10, Status = "ACTIVE",
-            CreatedAt = ChatMySqlFixture.Epoch, UpdatedAt = ChatMySqlFixture.Epoch });
+        db.OpenChatRooms.Add(new()
+        {
+            ChatRoomId = room.RoomId,
+            Visibility = "PUBLIC",
+            MaxMemberCount = 10,
+            Status = "ACTIVE",
+            CreatedAt = ChatMySqlFixture.Epoch,
+            UpdatedAt = ChatMySqlFixture.Epoch
+        });
         await db.SaveChangesAsync();
     }
     private static ChatPushOutboxEntity Job(SeededReadRoom room) => new()
-    { MessageId = room.FirstId, RoomId = room.RoomId, SenderUserId = room.UserId + 1, RecipientUserId = room.UserId,
-        EventId = Guid.NewGuid().ToString("D"), CreatedAtUtc = DateTime.UtcNow, DueAtUtc = DateTime.UtcNow.AddMinutes(-1) };
+    {
+        MessageId = room.FirstId,
+        RoomId = room.RoomId,
+        SenderUserId = room.UserId + 1,
+        RecipientUserId = room.UserId,
+        EventId = Guid.NewGuid().ToString("D"),
+        CreatedAtUtc = DateTime.UtcNow,
+        DueAtUtc = DateTime.UtcNow.AddMinutes(-1)
+    };
     private async Task<long> SeedJobAsync(SeededReadRoom room)
-    { await using var db = await fixture.Contexts.CreateDbContextAsync(); var job = Job(room); db.ChatPushOutbox.Add(job); await db.SaveChangesAsync(); return job.Id; }
+    {
+        await using var db = await fixture.Contexts.CreateDbContextAsync();
+        var job = Job(room);
+        db.ChatPushOutbox.Add(job);
+        await db.SaveChangesAsync();
+        return job.Id;
+    }
     private static ChatCorePushTarget Target() => new(401, "c2a1b179-bbe5-4be9-a8c9-6206767d4d60", "synthetic_binding", 1, 1, "ExpoPushToken[synthetic-token]", "android");
     private sealed class Profiles : IChatMessageProfileReader
     {

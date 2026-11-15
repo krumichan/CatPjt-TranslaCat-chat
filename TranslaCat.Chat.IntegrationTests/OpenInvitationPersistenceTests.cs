@@ -123,10 +123,17 @@ public sealed class OpenInvitationPersistenceTests(ChatMySqlFixture database)
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         int lookups = 0;
         DateTime current = Now;
-        var directory = new Directory { BeforeLookup = async () =>
+        var directory = new Directory
         {
-            if (Interlocked.Increment(ref lookups) == 1) { entered.SetResult(); await release.Task; }
-        } };
+            BeforeLookup = async () =>
+        {
+            if (Interlocked.Increment(ref lookups) == 1)
+            {
+                entered.SetResult();
+                await release.Task;
+            }
+        }
+        };
         var store = Store(new Delivery(database), directory,
             () => (current, DateTime.SpecifyKind(current, DateTimeKind.Utc)));
         var first = store.CreateAsync(actor, room, Request(actor + 1), default);
@@ -160,7 +167,11 @@ public sealed class OpenInvitationPersistenceTests(ChatMySqlFixture database)
         // 실행
         var outcomes = await Task.WhenAll(Enumerable.Range(1, 14).Select(async index =>
         {
-            try { await Store(delivery).CreateAsync(actor, index % 2 == 0 ? first : second, Request(actor + index), default); return "created"; }
+            try
+            {
+                await Store(delivery).CreateAsync(actor, index % 2 == 0 ? first : second, Request(actor + index), default);
+                return "created";
+            }
             catch (OpenInvitationException error) { return error.Code; }
         }));
 
@@ -187,21 +198,44 @@ public sealed class OpenInvitationPersistenceTests(ChatMySqlFixture database)
         if (reason is "already-member" or "banned")
         {
             await using var db = await database.Contexts.CreateDbContextAsync();
-            var member = new ChatRoomMemberEntity { ChatRoomId = room, UserId = target, Role = "MEMBER",
-                Active = reason == "already-member", JoinedAt = Now, CreatedAt = Now, UpdatedAt = Now };
+            var member = new ChatRoomMemberEntity
+            {
+                ChatRoomId = room,
+                UserId = target,
+                Role = "MEMBER",
+                Active = reason == "already-member",
+                JoinedAt = Now,
+                CreatedAt = Now,
+                UpdatedAt = Now
+            };
             db.ChatRoomMembers.Add(member);
             await db.SaveChangesAsync();
             if (reason == "banned")
             {
                 var sender = await db.ChatRoomMembers.SingleAsync(row => row.ChatRoomId == room && row.UserId == actor);
-                db.OpenChatBans.Add(new OpenChatBanEntity { ChatRoomId = room, TargetUserId = target,
-                    TargetChatRoomMemberId = member.Id, TargetMemberCode = "OC-BAN", NicknameSnapshot = "별명",
-                    LastJoinedAtSnapshot = Now, TargetRoleSnapshot = "MEMBER", BannedByMemberId = sender.Id,
-                    BannedByRole = "OWNER", BannedAt = Now, Reason = "합성", CreatedAt = Now, UpdatedAt = Now });
+                db.OpenChatBans.Add(new OpenChatBanEntity
+                {
+                    ChatRoomId = room,
+                    TargetUserId = target,
+                    TargetChatRoomMemberId = member.Id,
+                    TargetMemberCode = "OC-BAN",
+                    NicknameSnapshot = "별명",
+                    LastJoinedAtSnapshot = Now,
+                    TargetRoleSnapshot = "MEMBER",
+                    BannedByMemberId = sender.Id,
+                    BannedByRole = "OWNER",
+                    BannedAt = Now,
+                    Reason = "합성",
+                    CreatedAt = Now,
+                    UpdatedAt = Now
+                });
                 await db.SaveChangesAsync();
             }
         }
-        var request = Request(target) with { TargetPublicId = reason == "missing" ? "absent" : PublicId(target) };
+        var request = Request(target) with
+        {
+            TargetPublicId = reason == "missing" ? "absent" : PublicId(target)
+        };
 
         // 실행 / 검증
         var error = await Assert.ThrowsAsync<OpenInvitationException>(() => Store(new Delivery(database), directory)
@@ -244,11 +278,14 @@ public sealed class OpenInvitationPersistenceTests(ChatMySqlFixture database)
         var room = await SeedAsync(actor);
         await using (var db = await database.Contexts.CreateDbContextAsync())
         {
-            if (changed == "left") await db.ChatRoomMembers.Where(row => row.ChatRoomId == room && row.UserId == actor)
+            if (changed == "left")
+                await db.ChatRoomMembers.Where(row => row.ChatRoomId == room && row.UserId == actor)
                 .ExecuteUpdateAsync(set => set.SetProperty(row => row.Active, false));
-            if (changed == "closed") await db.OpenChatRooms.Where(row => row.ChatRoomId == room)
+            if (changed == "closed")
+                await db.OpenChatRooms.Where(row => row.ChatRoomId == room)
                 .ExecuteUpdateAsync(set => set.SetProperty(row => row.Status, "CLOSED"));
-            if (changed == "inactive") await db.ChatRooms.Where(row => row.Id == room)
+            if (changed == "inactive")
+                await db.ChatRooms.Where(row => row.Id == room)
                 .ExecuteUpdateAsync(set => set.SetProperty(row => row.Active, false));
         }
 
@@ -274,8 +311,15 @@ public sealed class OpenInvitationPersistenceTests(ChatMySqlFixture database)
         long otherKind;
         await using (var db = await database.Contexts.CreateDbContextAsync())
         {
-            var activity = new ChatNotificationEntity { RecipientUserId = actor + 1, NotificationType = "OPEN_CHAT_ROLE_CHANGED",
-                ChatRoomId = firstRoom, PayloadJson = "{}", SourceEventKey = "synthetic:" + Guid.NewGuid(), CreatedAt = Now };
+            var activity = new ChatNotificationEntity
+            {
+                RecipientUserId = actor + 1,
+                NotificationType = "OPEN_CHAT_ROLE_CHANGED",
+                ChatRoomId = firstRoom,
+                PayloadJson = "{}",
+                SourceEventKey = "synthetic:" + Guid.NewGuid(),
+                CreatedAt = Now
+            };
             db.ChatNotifications.Add(activity);
             await db.SaveChangesAsync();
             otherKind = activity.Id;
@@ -306,22 +350,42 @@ public sealed class OpenInvitationPersistenceTests(ChatMySqlFixture database)
     {
         var seeded = await database.SeedReadRoomAsync("OPEN", actor);
         await using var db = await database.Contexts.CreateDbContextAsync();
-        db.OpenChatRooms.Add(new OpenChatRoomEntity { ChatRoomId = seeded.RoomId, Visibility = "UNLISTED", Status = "ACTIVE",
-            MaxMemberCount = 100, CreatedAt = Now, UpdatedAt = Now });
-        db.OpenChatMemberProfiles.Add(new OpenChatMemberProfileEntity { ChatRoomMemberId = seeded.MemberId,
-            MemberCode = "OC-" + Guid.NewGuid().ToString("N")[..10], Nickname = "방 전용 별명", CreatedAt = Now, UpdatedAt = Now });
+        db.OpenChatRooms.Add(new OpenChatRoomEntity
+        {
+            ChatRoomId = seeded.RoomId,
+            Visibility = "UNLISTED",
+            Status = "ACTIVE",
+            MaxMemberCount = 100,
+            CreatedAt = Now,
+            UpdatedAt = Now
+        });
+        db.OpenChatMemberProfiles.Add(new OpenChatMemberProfileEntity
+        {
+            ChatRoomMemberId = seeded.MemberId,
+            MemberCode = "OC-" + Guid.NewGuid().ToString("N")[..10],
+            Nickname = "방 전용 별명",
+            CreatedAt = Now,
+            UpdatedAt = Now
+        });
         await db.SaveChangesAsync();
         return seeded.RoomId;
     }
     private sealed class Directory : IChatMembershipDirectory
     {
-        public bool Blocked { get; init; }
-        public Func<Task>? BeforeLookup { get; init; }
+        public bool Blocked
+        {
+            get; init;
+        }
+        public Func<Task>? BeforeLookup
+        {
+            get; init;
+        }
         public Task<ChatMembershipUser?> FindByIdAsync(long id, CancellationToken token) => Task.FromResult<ChatMembershipUser?>(
             new(id, "sensitive@example.invalid", "sensitive-name", PublicId(id), "sensitive-general-profile", null));
         public async Task<ChatMembershipUser?> FindByPublicIdAsync(string id, CancellationToken token)
         {
-            if (BeforeLookup is not null) await BeforeLookup();
+            if (BeforeLookup is not null)
+                await BeforeLookup();
             return id.StartsWith("TC-") && long.TryParse(id[3..], out long parsed) ? await FindByIdAsync(parsed, token) : null;
         }
         public Task<bool> AreFriendsAsync(long id, long other, CancellationToken token) => Task.FromResult(false);
@@ -329,7 +393,10 @@ public sealed class OpenInvitationPersistenceTests(ChatMySqlFixture database)
     }
     private sealed class Delivery(ChatMySqlFixture database) : IChatActivityNotificationDelivery
     {
-        public bool FailDelivery { get; init; }
+        public bool FailDelivery
+        {
+            get; init;
+        }
         public ConcurrentQueue<long> Delivered { get; } = new();
         public Task ValidateAvailabilityAsync(CancellationToken token) => Task.CompletedTask;
         public async Task DeliverAsync(string email, ChatNotificationActivity notification, DateTime now, CancellationToken token)
@@ -338,7 +405,8 @@ public sealed class OpenInvitationPersistenceTests(ChatMySqlFixture database)
             Assert.True(await db.ChatNotifications.AnyAsync(row => row.Id == notification.Id, token));
             Assert.True(await db.OpenInvitationPushOutbox.AnyAsync(row => row.NotificationId == notification.Id, token));
             Delivered.Enqueue(notification.Id);
-            if (FailDelivery) throw new InvalidOperationException("Synthetic delivery unavailable");
+            if (FailDelivery)
+                throw new InvalidOperationException("Synthetic delivery unavailable");
         }
     }
 }

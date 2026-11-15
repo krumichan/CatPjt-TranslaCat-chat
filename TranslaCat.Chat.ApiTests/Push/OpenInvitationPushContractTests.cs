@@ -16,7 +16,11 @@ public sealed class OpenInvitationPushContractTests
         var target = new ChatCorePushTarget(22, "c2a1b179-bbe5-4be9-a8c9-6206767d4d60", "synthetic_binding", 1, 1,
             "ExpoPushToken[synthetic-token]", "android");
         var invitation = new OpenInvitationPushOutboxEntity
-        { NotificationId = long.MaxValue, RoomId = 9007199254740993, EventId = "event" };
+        {
+            NotificationId = long.MaxValue,
+            RoomId = 9007199254740993,
+            EventId = "event"
+        };
         var message = new ChatPushOutboxEntity { MessageId = long.MaxValue, RoomId = 9007199254740993, EventId = "event" };
 
         // 실행
@@ -41,9 +45,11 @@ public sealed class OpenInvitationPushContractTests
         var enabled = new ServiceCollection();
         var values = new Dictionary<string, string?>
         {
-            ["Chat:Push:Enabled"] = "true", ["Chat:Push:AppEnvironment"] = "development",
+            ["Chat:Push:Enabled"] = "true",
+            ["Chat:Push:AppEnvironment"] = "development",
             ["Chat:Push:ProjectId"] = "55b79b33-07b9-4d4b-a3f8-cf24ea76b139",
-            ["Chat:Database:ConnectionString"] = "synthetic", ["Chat:Core:Enabled"] = "true"
+            ["Chat:Database:ConnectionString"] = "synthetic",
+            ["Chat:Core:Enabled"] = "true"
         };
 
         // 실행

@@ -27,8 +27,12 @@ public sealed partial class EfChatAiStore
             {
                 long? account = await db.ChatMessages.AsNoTracking().Where(row => row.Id == source.MessageId && row.ChatRoomId == roomId)
                     .Select(row => row.SenderUserId).SingleOrDefaultAsync(cancellationToken);
-                if (account is null) return ChatAiProcessingResult.Skipped;
-                try { await ChatAccountWriteGate.AcquireAsync(db, [account.Value], cancellationToken); }
+                if (account is null)
+                    return ChatAiProcessingResult.Skipped;
+                try
+                {
+                    await ChatAccountWriteGate.AcquireAsync(db, [account.Value], cancellationToken);
+                }
                 catch (ChatSafetyException error) when (error.Code == "CHAT_ACCOUNT_DELETED") { return ChatAiProcessingResult.Skipped; }
             }
             var room = await LockRoomAsync(db, roomId, cancellationToken);

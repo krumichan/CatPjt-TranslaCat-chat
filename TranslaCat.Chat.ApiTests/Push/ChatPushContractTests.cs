@@ -67,7 +67,9 @@ public sealed class ChatPushContractTests
     {
         // 준비
         using var http = new HttpClient(new Handler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-        { Content = new StringContent(response, Encoding.UTF8, "application/json") })));
+        {
+            Content = new StringContent(response, Encoding.UTF8, "application/json")
+        })));
         var core = new HttpChatCoreClient(http, new(new Uri("https://synthetic.invalid"), TimeSpan.FromSeconds(1)), new RecordingTokens());
 
         // 실행
@@ -102,13 +104,18 @@ public sealed class ChatPushContractTests
     public async Task Core_push_token_inner_length_matches_registry_contract(int innerLength, bool accepted)
     {
         // 준비: BE는 prefix를 제외한 괄호 내부를 최대 256자로 제한한다.
-        var target = Target with { ExpoPushToken = "ExponentPushToken[" + new string('a', innerLength) + "]" };
+        var target = Target with
+        {
+            ExpoPushToken = "ExponentPushToken[" + new string('a', innerLength) + "]"
+        };
         using var http = new HttpClient(new Handler(_ => Task.FromResult(Json(new ChatCorePushTargets([target])))));
         var core = new HttpChatCoreClient(http, new(new Uri("https://synthetic.invalid"), TimeSpan.FromSeconds(1)), new RecordingTokens());
 
         // 실행 / 검증
-        if (accepted) Assert.Equal(target, Assert.Single((await core.PushTargetsAsync([42], "development", Project, default)).Targets));
-        else await Assert.ThrowsAsync<ChatCoreUnavailableException>(() => core.PushTargetsAsync([42], "development", Project, default));
+        if (accepted)
+            Assert.Equal(target, Assert.Single((await core.PushTargetsAsync([42], "development", Project, default)).Targets));
+        else
+            await Assert.ThrowsAsync<ChatCoreUnavailableException>(() => core.PushTargetsAsync([42], "development", Project, default));
     }
     [Fact]
     public void Push_flags_require_explicit_valid_configuration_and_no_worker_by_default()
@@ -133,7 +140,9 @@ public sealed class ChatPushContractTests
         // 준비
         var provider = new ChatCoreAccessTokenProvider(new ChatServiceTokenSettings
         {
-            Issuer = "synthetic-chat", Audience = "synthetic-be", Service = "synthetic-chat",
+            Issuer = "synthetic-chat",
+            Audience = "synthetic-be",
+            Service = "synthetic-chat",
             Base64SigningKey = Convert.ToBase64String(new byte[32])
         }, "Testing", TimeProvider.System);
 
@@ -187,11 +196,17 @@ public sealed class ChatPushContractTests
     }
 
     private static HttpResponseMessage Json<T>(T value) => new(HttpStatusCode.OK)
-    { Content = new StringContent(JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web)), Encoding.UTF8, "application/json") };
+    {
+        Content = new StringContent(JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web)), Encoding.UTF8, "application/json")
+    };
     private sealed class RecordingTokens : IChatCoreAccessTokenProvider
     {
         public List<string> Values { get; } = [];
-        public string CreateToken(string scope) { Values.Add(scope); return "synthetic-service-token"; }
+        public string CreateToken(string scope)
+        {
+            Values.Add(scope);
+            return "synthetic-service-token";
+        }
     }
     private sealed class Handler(Func<HttpRequestMessage, Task<HttpResponseMessage>> response) : HttpMessageHandler
     {

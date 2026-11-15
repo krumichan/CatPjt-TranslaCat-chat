@@ -30,7 +30,12 @@ public sealed class ChatReportController(IChatReportStore store, ChatSafetyOptio
     {
         RequireEnabled();
         var result = await store.ListAsync(status, cursorId, size ?? 30, Now(), token);
-        return Ok(responses.Success(HttpContext, new { reports = result.Reports.Select(Receipt), result.NextCursorId, result.HasNext }));
+        return Ok(responses.Success(HttpContext, new
+        {
+            reports = result.Reports.Select(Receipt),
+            result.NextCursorId,
+            result.HasNext
+        }));
     }
 
     [Authorize(Roles = "ROLE_ADMIN"), HttpGet("api/v1/admin/chat/reports/{reportId:long}")]
@@ -47,34 +52,63 @@ public sealed class ChatReportController(IChatReportStore store, ChatSafetyOptio
         return Ok(responses.Success(HttpContext, Detail(await store.UpdateAsync(UserId(), reportId, request, Now(), token))));
     }
 
-    private object Receipt(ChatReportReceipt row) => new { row.Id, row.RoomId, row.TargetType, row.Reason, row.Status,
-        createdAt = timestamps.Format(row.CreatedAt), evidenceExpiresAt = timestamps.Format(row.EvidenceExpiresAt),
-        row.Duplicate, row.Version, row.EvidenceExpired };
-    private object Detail(ChatReportDetail row) => new { row.Receipt.Id, row.Receipt.RoomId, row.Receipt.TargetType,
-        row.Receipt.Reason, row.Receipt.Status, createdAt = timestamps.Format(row.Receipt.CreatedAt),
-        evidenceExpiresAt = timestamps.Format(row.Receipt.EvidenceExpiresAt), row.Receipt.Duplicate, row.Receipt.Version,
-        row.Receipt.EvidenceExpired, row.Detail, row.EvidenceContent, row.EvidenceSenderDisplay, row.ReviewNote,
-        updatedAt = timestamps.Format(row.UpdatedAt) };
+    private object Receipt(ChatReportReceipt row) => new
+    {
+        row.Id,
+        row.RoomId,
+        row.TargetType,
+        row.Reason,
+        row.Status,
+        createdAt = timestamps.Format(row.CreatedAt),
+        evidenceExpiresAt = timestamps.Format(row.EvidenceExpiresAt),
+        row.Duplicate,
+        row.Version,
+        row.EvidenceExpired
+    };
+    private object Detail(ChatReportDetail row) => new
+    {
+        row.Receipt.Id,
+        row.Receipt.RoomId,
+        row.Receipt.TargetType,
+        row.Receipt.Reason,
+        row.Receipt.Status,
+        createdAt = timestamps.Format(row.Receipt.CreatedAt),
+        evidenceExpiresAt = timestamps.Format(row.Receipt.EvidenceExpiresAt),
+        row.Receipt.Duplicate,
+        row.Receipt.Version,
+        row.Receipt.EvidenceExpired,
+        row.Detail,
+        row.EvidenceContent,
+        row.EvidenceSenderDisplay,
+        row.ReviewNote,
+        updatedAt = timestamps.Format(row.UpdatedAt)
+    };
     private long UserId() => ChatReadAuthorization.TryGetUserId(User, out long id) ? id : throw new UnauthorizedAccessException();
     private DateTime Now() => localTime.FromUtc(clock.GetUtcNow());
     private void RequireEnabled()
     {
         Response.Headers.CacheControl = "no-store";
-        if (!options.Enabled) throw new ChatSafetyException("CHAT_SAFETY_DISABLED", "신고 기능을 준비하고 있습니다.");
+        if (!options.Enabled)
+            throw new ChatSafetyException("CHAT_SAFETY_DISABLED", "신고 기능을 준비하고 있습니다.");
     }
 }
 
 public sealed class ChatReportBoundaryAttribute : ActionFilterAttribute, IExceptionFilter
 {
-    public ChatReportBoundaryAttribute() { Order = -3300; }
+    public ChatReportBoundaryAttribute()
+    {
+        Order = -3300;
+    }
     public override void OnActionExecuting(ActionExecutingContext context)
     {
         context.HttpContext.Response.Headers.CacheControl = "no-store";
-        if (!context.ModelState.IsValid) context.Result = Error(context.HttpContext, 400, "CHAT_REPORT_INVALID", "신고 요청 형식을 확인해 주세요.");
+        if (!context.ModelState.IsValid)
+            context.Result = Error(context.HttpContext, 400, "CHAT_REPORT_INVALID", "신고 요청 형식을 확인해 주세요.");
     }
     public void OnException(ExceptionContext context)
     {
-        if (context.Exception is OperationCanceledException && context.HttpContext.RequestAborted.IsCancellationRequested) return;
+        if (context.Exception is OperationCanceledException && context.HttpContext.RequestAborted.IsCancellationRequested)
+            return;
         var (status, code, message) = context.Exception switch
         {
             ChatSafetyException error => (error.Code.EndsWith("CONFLICT", StringComparison.Ordinal) ? 409 : error.Code == "CHAT_REPORT_NOT_FOUND" ? 404
@@ -86,7 +120,10 @@ public sealed class ChatReportBoundaryAttribute : ActionFilterAttribute, IExcept
         context.ExceptionHandled = true;
     }
     private static ObjectResult Error(HttpContext context, int status, string code, string message) => new(
-        context.RequestServices.GetRequiredService<ChatReadHttpResponses>().Error(context, status, code, message)) { StatusCode = status };
+        context.RequestServices.GetRequiredService<ChatReadHttpResponses>().Error(context, status, code, message))
+    {
+        StatusCode = status
+    };
 }
 
 public static class ChatReportHttpExtensions

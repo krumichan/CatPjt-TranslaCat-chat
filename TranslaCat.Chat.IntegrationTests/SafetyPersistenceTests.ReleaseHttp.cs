@@ -33,7 +33,8 @@ public sealed partial class SafetyPersistenceTests
         await using var host = await DeletionHttpHost.StartAsync(fixture.Contexts, scenario != "disabled");
         await using var db = await fixture.Contexts.CreateDbContextAsync();
         bool altered = scenario == "missing-column";
-        if (altered) await db.Database.ExecuteSqlRawAsync("ALTER TABLE chat_open_profile_upload_intent RENAME COLUMN attempts TO synthetic_http_missing_attempts");
+        if (altered)
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE chat_open_profile_upload_intent RENAME COLUMN attempts TO synthetic_http_missing_attempts");
         try
         {
             // 실행: 토큰 subject/path를 일치시키고 capability 성공 뒤 같은 operation으로 두 번 접수한다.
@@ -72,7 +73,8 @@ public sealed partial class SafetyPersistenceTests
         }
         finally
         {
-            if (altered) await db.Database.ExecuteSqlRawAsync("ALTER TABLE chat_open_profile_upload_intent RENAME COLUMN synthetic_http_missing_attempts TO attempts");
+            if (altered)
+                await db.Database.ExecuteSqlRawAsync("ALTER TABLE chat_open_profile_upload_intent RENAME COLUMN synthetic_http_missing_attempts TO attempts");
         }
     }
 
@@ -81,7 +83,9 @@ public sealed partial class SafetyPersistenceTests
         public HttpClient Client { get; } = client;
         public string Token(long userId) => ChatServiceJwt.Issue(new()
         {
-            Issuer = "translacat-be", Audience = "translacat-chat", Service = "translacat-be",
+            Issuer = "translacat-be",
+            Audience = "translacat-chat",
+            Service = "translacat-be",
             Base64SigningKey = Convert.ToBase64String(key)
         }, "Testing", "chat-account-delete", "chat:account-delete", userId, DateTimeOffset.UtcNow);
 
@@ -93,7 +97,8 @@ public sealed partial class SafetyPersistenceTests
             byte[] key = RandomNumberGenerator.GetBytes(32);
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Chat:SourceTimeZone"] = "UTC", ["Chat:Safety:Enabled"] = enabled.ToString(),
+                ["Chat:SourceTimeZone"] = "UTC",
+                ["Chat:Safety:Enabled"] = enabled.ToString(),
                 ["Chat:Safety:AccountDeletionEnabled"] = enabled.ToString(),
                 [ChatServiceIngressOptions.SectionName + ":Enabled"] = "true",
                 [ChatServiceIngressOptions.SectionName + ":Issuer"] = "translacat-be",
@@ -114,6 +119,11 @@ public sealed partial class SafetyPersistenceTests
             string address = application.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
             return new(application, new HttpClient { BaseAddress = new Uri(address) }, key);
         }
-        public async ValueTask DisposeAsync() { Client.Dispose(); await app.StopAsync(); await app.DisposeAsync(); }
+        public async ValueTask DisposeAsync()
+        {
+            Client.Dispose();
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
     }
 }

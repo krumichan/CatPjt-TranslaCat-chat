@@ -19,7 +19,8 @@ public sealed class EfChatRealtimeAccess(IDbContextFactory<ChatDbContext> contex
 
     private async Task ValidateAsync(long userId, long roomId, bool closureOnly, CancellationToken cancellationToken)
     {
-        if (contentPolicy is not null) await contentPolicy.RequireActiveAsync(userId, cancellationToken);
+        if (contentPolicy is not null)
+            await contentPolicy.RequireActiveAsync(userId, cancellationToken);
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         var open = await context.OpenChatRooms.AsNoTracking()
             .SingleOrDefaultAsync(room => room.ChatRoomId == roomId, cancellationToken);
